@@ -5,15 +5,17 @@ import (
 	"fmt"
 	"sync"
 	"unsafe"
+
+	chainMutex "github.com/xshkut/distributed-lock/pgk/chain_mutex"
 )
 
-type LQResource struct {
-	lockType     LockType
+type LockResource struct {
+	lockType     chainMutex.LockType
 	resourcePath []string
 }
 
-func NewLockResource(lockType LockType, resourcePath []string) LQResource {
-	return LQResource{
+func NewLockResource(lockType LockType, resourcePath []string) LockResource {
+	return LockResource{
 		lockType:     lockType,
 		resourcePath: resourcePath,
 	}
@@ -21,28 +23,28 @@ func NewLockResource(lockType LockType, resourcePath []string) LQResource {
 
 type LQLayer struct {
 	id        int64
-	resources []LQResource
+	resources []LockResource
 }
 
 type LockQueue struct {
-	mx             sync.Mutex
-	nextLayerID    int64
-	layers         []LQLayer
-	resourcesPaths SetCounter
-	tokens         SetCounter
+	mx           sync.Mutex
+	nextLayerID  int64
+	layers       []LQLayer
+	tokens       SetCounter
+	chainMutexes map[string]*ChainMutex
 }
 
 func NewLockQueue() *LockQueue {
 	return &LockQueue{
-		nextLayerID:    1,
-		layers:         []LQLayer{},
-		resourcesPaths: NewSetCounter(),
-		tokens:         NewSetCounter(),
+		nextLayerID:  1,
+		layers:       []LQLayer{},
+		tokens:       NewSetCounter(),
+		chainMutexes: make(map[string]*ChainMutex),
 	}
 }
 
 // Lock locks the whole layer. Returns when the layer is locked. Use 'release' to unlock or cancel the lock (even if the lock has not been returned yet).
-func (lq *LockQueue) LockLayer(resources []LQResource, unlock <-chan interface{}) {
+func (lq *LockQueue) LockLayer(resources []LockResource, unlock <-chan interface{}) {
 	lq.mx.Lock()
 
 	lq.layers = append(lq.layers, LQLayer{
@@ -53,25 +55,40 @@ func (lq *LockQueue) LockLayer(resources []LQResource, unlock <-chan interface{}
 	lq.nextLayerID++
 
 	lq.mx.Unlock()
-
 }
 
-func (lq *LockQueue) lockResource(lqr LQResource, release <-chan interface{}) {
+func (lq *LockQueue) getLockResourceChainMutex(lqr LockResource) {
 	lq.mx.Lock()
+	defer lq.mx.Unlock()
 
-	tokenPointers := make([]uintptr, len(lq.layers))
-	for _, r := range lqr.resourcePath {
-		p := lq.resourcesPaths.Store(r)
-		tokenPointers = append(tokenPointers, uintptr(unsafe.Pointer(p)))
+	path := lq.getResourceCompactPath(lqr.resourcePath)
+	defer lq.releaseResourcePath(lqr.resourcePath)
+
+	if cm, ok := lq.chainMutexes[path]; ok {
 
 	}
 
-	// compactedPath := buildCOmpactedPath(tokenPointers)
-
-	lq.mx.Unlock()
 }
 
-func buildCOmpactedPath(pointers []uintptr) string {
+func (lq *LockQueue) getResourceCompactPath(path []string) string {
+	tokenPointers := make([]uintptr, len(path))
+
+	for i, segment := range path {
+		p := lq.tokens.Store(segment)
+
+		tokenPointers[i] = uintptr(unsafe.Pointer(p))
+	}
+
+	return buildCompactPathFromPointers(tokenPointers)
+}
+
+func (lq *LockQueue) releaseResourcePath(path []string) {
+	for _, segment := range path {
+		lq.tokens.Release(segment)
+	}
+}
+
+func buildCompactPathFromPointers(pointers []uintptr) string {
 	concatSlice := make([]byte, 0)
 
 	for _, p := range pointers {

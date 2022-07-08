@@ -57,7 +57,7 @@ func (cm *ChainMutex) Unlock() {
 
 	cm.selfMx.Unlock()
 
-	if !cm.hasChild() {
+	if !cm.HasChild() {
 		return
 	}
 
@@ -95,7 +95,7 @@ func (cm *ChainMutex) Chain(lockType LockType) *ChainMutex {
 	return cm.child
 }
 
-func (cm *ChainMutex) hasChild() bool {
+func (cm *ChainMutex) HasChild() bool {
 	return cm.child != nil
 }
 
@@ -123,7 +123,7 @@ func (cm *ChainMutex) releaseConcurrentChain() {
 		return
 	}
 
-	if !cm.hasChild() {
+	if !cm.HasChild() {
 		return
 	}
 
