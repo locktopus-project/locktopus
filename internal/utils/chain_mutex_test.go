@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"sync"
 	"testing"
-	"time"
 )
 
 func TestNewChainMutex_SequentialOrder_LockBeforeChain(t *testing.T) {
@@ -166,17 +165,109 @@ func TestNewChainMutex_ReadsMustBeParallel(t *testing.T) {
 		order = append(order, 3)
 		cm3.Unlock()
 
-		time.Sleep(time.Millisecond * 10)
+		cm4.Lock()
+		order = append(order, 4)
+		cm4.Unlock()
+
+		cm2.Lock()
+		order = append(order, 2)
+		cm2.Unlock()
+
+		wg.Done()
+	}()
+
+	go func() {
+		cm1.Lock()
+		order = append(order, 1)
+		cm1.Unlock()
+
+		wg.Done()
+	}()
+
+	wg.Wait()
+
+	if fmt.Sprintf("%v", order) != "[1 3 4 2 5]" {
+		t.Errorf("Expected order to be [1 3 4 2 5], got %v", order)
+	}
+}
+
+func TestNewChainMutex_EnsureTailingReadWorks(t *testing.T) {
+	order := make([]int, 0)
+	wg := sync.WaitGroup{}
+	wg.Add(2)
+
+	var cm1, cm2, cm3, cm4 *ChainMutex
+
+	cm1 = NewChainMutex(LockTypeWrite)
+	cm2 = cm1.Chain(LockTypeRead)
+	cm3 = cm2.Chain(LockTypeRead)
+	cm4 = cm3.Chain(LockTypeRead)
+
+	go func() {
+		cm3.Lock()
+		order = append(order, 3)
+		cm3.Unlock()
 
 		cm4.Lock()
 		order = append(order, 4)
 		cm4.Unlock()
 
-		time.Sleep(time.Millisecond * 10)
+		cm2.Lock()
+		order = append(order, 2)
+		cm2.Unlock()
+
+		cm5 := cm4.Chain(LockTypeRead)
+		cm5.Lock()
+		order = append(order, 5)
+		cm5.Unlock()
+
+		wg.Done()
+	}()
+
+	go func() {
+		cm1.Lock()
+		order = append(order, 1)
+		cm1.Unlock()
+
+		wg.Done()
+	}()
+
+	wg.Wait()
+
+	if fmt.Sprintf("%v", order) != "[1 3 4 2 5]" {
+		t.Errorf("Expected order to be [1 3 4 2 5], got %v", order)
+	}
+}
+
+func TestNewChainMutex_EnsureTailingWriteWorks(t *testing.T) {
+	order := make([]int, 0)
+	wg := sync.WaitGroup{}
+	wg.Add(2)
+
+	var cm1, cm2, cm3, cm4 *ChainMutex
+
+	cm1 = NewChainMutex(LockTypeWrite)
+	cm2 = cm1.Chain(LockTypeRead)
+	cm3 = cm2.Chain(LockTypeRead)
+	cm4 = cm3.Chain(LockTypeRead)
+
+	go func() {
+		cm3.Lock()
+		order = append(order, 3)
+		cm3.Unlock()
+
+		cm4.Lock()
+		order = append(order, 4)
+		cm4.Unlock()
 
 		cm2.Lock()
 		order = append(order, 2)
 		cm2.Unlock()
+
+		cm5 := cm4.Chain(LockTypeWrite)
+		cm5.Lock()
+		order = append(order, 5)
+		cm5.Unlock()
 
 		wg.Done()
 	}()
