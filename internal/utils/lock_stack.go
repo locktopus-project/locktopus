@@ -7,6 +7,7 @@ import (
 	"unsafe"
 
 	chainMutex "github.com/xshkut/distributed-lock/pgk/chain_mutex"
+	setCounter "github.com/xshkut/distributed-lock/pgk/set_counter"
 )
 
 type LockResource struct {
@@ -14,7 +15,7 @@ type LockResource struct {
 	resourcePath []string
 }
 
-func NewLockResource(lockType LockType, resourcePath []string) LockResource {
+func NewLockResource(lockType chainMutex.LockType, resourcePath []string) LockResource {
 	return LockResource{
 		lockType:     lockType,
 		resourcePath: resourcePath,
@@ -30,16 +31,16 @@ type LockQueue struct {
 	mx           sync.Mutex
 	nextLayerID  int64
 	layers       []LQLayer
-	tokens       SetCounter
-	chainMutexes map[string]*ChainMutex
+	tokens       setCounter.SetCounter
+	chainMutexes map[string]*chainMutex.Vertice
 }
 
 func NewLockQueue() *LockQueue {
 	return &LockQueue{
 		nextLayerID:  1,
 		layers:       []LQLayer{},
-		tokens:       NewSetCounter(),
-		chainMutexes: make(map[string]*ChainMutex),
+		tokens:       setCounter.NewSetCounter(),
+		chainMutexes: make(map[string]*chainMutex.Vertice),
 	}
 }
 
@@ -58,15 +59,15 @@ func (lq *LockQueue) LockLayer(resources []LockResource, unlock <-chan interface
 }
 
 func (lq *LockQueue) getLockResourceChainMutex(lqr LockResource) {
-	lq.mx.Lock()
-	defer lq.mx.Unlock()
+	// lq.mx.Lock()
+	// defer lq.mx.Unlock()
 
-	path := lq.getResourceCompactPath(lqr.resourcePath)
-	defer lq.releaseResourcePath(lqr.resourcePath)
+	// path := lq.getResourceCompactPath(lqr.resourcePath)
+	// defer lq.releaseResourcePath(lqr.resourcePath)
 
-	if cm, ok := lq.chainMutexes[path]; ok {
+	// // if cm, ok := lq.chainMutexes[path]; ok {
 
-	}
+	// // }
 
 }
 

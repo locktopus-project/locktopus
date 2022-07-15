@@ -25,7 +25,7 @@ func NewLockPath(lockType chainMutex.LockType, resourcePath []string) lockPath {
 type LockPoint struct {
 	path    string
 	isLeaf  bool
-	cm      *chainMutex.ChainMutex
+	cm      *chainMutex.Vertice
 	layerID uint64
 }
 
@@ -52,37 +52,37 @@ func (ls *LockSpace) LockLayer(resources []lockPath) {
 
 }
 
-func (ls *LockSpace) lockPath(lp lockPath) (cm *chainMutex.ChainMutex) {
-	lockPaths := make([]string, len(lp.pathSegments))
+// func (ls *LockSpace) lockPath(lp lockPath) (cm *chainMutex.ChainMutex) {
+// 	lockPaths := make([]string, len(lp.pathSegments))
 
-	for i, _ := range lp.pathSegments {
-		lockPaths[i] = ls.getResourceCompactPath(lp.pathSegments[:i+1])
-	}
+// 	for i, _ := range lp.pathSegments {
+// 		lockPaths[i] = ls.getResourceCompactPath(lp.pathSegments[:i+1])
+// 	}
 
-	maxLayerId := uint64(0)
-	var highetsCM *chainMutex.ChainMutex
+// 	maxLayerId := uint64(0)
+// 	var highetsCM *chainMutex.ChainMutex
 
-	for i, path := range lockPaths {
-		isLeaf := i == len(lockPaths)-1
+// 	for i, path := range lockPaths {
+// 		isLeaf := i == len(lockPaths)-1
 
-		if lp, ok := ls.lockSurface[path]; !ok {
-			if !lp.isLeaf && !isLeaf {
-				continue
-			}
+// 		if lp, ok := ls.lockSurface[path]; !ok {
+// 			if !lp.isLeaf && !isLeaf {
+// 				continue
+// 			}
 
-			if lp.layerID > maxLayerId {
-				maxLayerId = lp.layerID
-				highetsCM = lp.cm
-			}
-		}
-	}
+// 			if lp.layerID > maxLayerId {
+// 				maxLayerId = lp.layerID
+// 				highetsCM = lp.cm
+// 			}
+// 		}
+// 	}
 
-	if highetsCM == nil {
-		return chainMutex.NewChainMutex(lp.lockType)
-	}
+// 	if highetsCM == nil {
+// 		return chainMutex.NewChainMutex(lp.lockType)
+// 	}
 
-	return highetsCM.Chain(lp.lockType)
-}
+// 	// return highetsCM.AddChild(lp.lockType)
+// }
 
 func (ls *LockSpace) getResourceCompactPath(path []string) string {
 	tokenPointers := make([]uintptr, len(path))
