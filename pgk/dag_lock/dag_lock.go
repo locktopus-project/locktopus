@@ -241,12 +241,3 @@ func (v *Vertice) refreshState() {
 		}
 	}
 }
-
-// func removeFromSlice(s []int, value int){
-// 	for i, v := range s {
-// 		if v == value {
-// 			s = append(s[:i], s[i+1:]...)
-// 			return
-// 		}
-// 	}
-// }
