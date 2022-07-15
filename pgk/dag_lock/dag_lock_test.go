@@ -379,11 +379,7 @@ func TestNewVertice_EnsureStackedReadsAreAllBlocked(t *testing.T) {
 	v2 := NewVertice(LockTypeRead, "v2")
 	v3 := NewVertice(LockTypeRead, "v3")
 
-	wg := sync.WaitGroup{}
-	wg.Add(1)
-
 	v1.Lock()
-
 	v1.AddChild(v2)
 	v2.AddChild(v3)
 
@@ -402,54 +398,22 @@ func TestNewVertice_EnsureStackedReadsAreAllBlocked(t *testing.T) {
 
 func TestNewVertice_EnsureStackedWritesAreAllBlocked(t *testing.T) {
 	v1 := NewVertice(LockTypeWrite, "v1")
-	v2 := NewVertice(LockTypeWrite, "v2")
-	v3 := NewVertice(LockTypeWrite, "v3")
-
-	wg := sync.WaitGroup{}
-	wg.Add(1)
+	v2 := NewVertice(LockTypeRead, "v2")
+	v3 := NewVertice(LockTypeRead, "v3")
 
 	v1.Lock()
-
 	v1.AddChild(v2)
 	v2.AddChild(v3)
 
-	v3.Lock()
+	select {
+	case <-v2.LockChan():
+		t.Error("Third read is expected to be locked")
+	default:
+	}
 
-	t.Error("Second write is expected to be locked")
-}
-
-func TestNewVertice_EnsureStackedWritesAreAllBlocked2(t *testing.T) {
-	v1 := NewVertice(LockTypeWrite, "v1")
-	v2 := NewVertice(LockTypeWrite, "v2")
-	v3 := NewVertice(LockTypeWrite, "v3")
-
-	wg := sync.WaitGroup{}
-	wg.Add(1)
-
-	v1.Lock()
-
-	v1.AddChild(v2)
-	v2.AddChild(v3)
-
-	v3.Lock()
-
-	t.Error("Second write is expected to be locked")
-}
-
-func TestNewVertice_EnsureStackedWritesAreAllBlocked3(t *testing.T) {
-	v1 := NewVertice(LockTypeWrite, "v1")
-	v2 := NewVertice(LockTypeWrite, "v2")
-	v3 := NewVertice(LockTypeWrite, "v3")
-
-	wg := sync.WaitGroup{}
-	wg.Add(1)
-
-	v1.Lock()
-
-	v1.AddChild(v2)
-	v2.AddChild(v3)
-
-	v3.Lock()
-
-	t.Error("Second write is expected to be locked")
+	select {
+	case <-v3.LockChan():
+		t.Error("Second read is expected to be locked")
+	default:
+	}
 }
