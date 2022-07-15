@@ -4,6 +4,7 @@ https://en.wikipedia.org/wiki/Directed_acyclic_graph
 package internal
 
 import (
+	"fmt"
 	"sync"
 )
 
@@ -105,7 +106,11 @@ func (v *Vertice) Lock() {
 
 	v.selfMx.Lock()
 
+	v._mx.Lock()
 	v.lockState = LockedByClient
+	v._mx.Unlock()
+
+	fmt.Println("v.lockState = LockedByClient", v.name)
 }
 
 // LockChain returns a channel which is immediately ready to receive from if the lock has been acquired.
@@ -125,7 +130,10 @@ func (v *Vertice) LockChan() <-chan interface{} {
 
 	go func() {
 		v.selfMx.Lock()
+
+		v._mx.Lock()
 		v.lockState = LockedByClient
+		v._mx.Unlock()
 
 		ch <- struct{}{}
 		close(ch)
@@ -146,7 +154,7 @@ func (v *Vertice) Unlock() {
 	v._mx.Lock()
 
 	if v.lockState != LockedByClient {
-		panic("Unable to unlock: Call Unlock only after acquiring Lock")
+		panic("Unable to unlock: Call Unlock only after acquiring Lock. lockState = " + fmt.Sprint(v.lockState))
 	}
 
 	v.selfMx.Unlock()
@@ -232,7 +240,6 @@ func (v *Vertice) refreshState() {
 			}
 		}
 	}
-
 }
 
 // func removeFromSlice(s []int, value int){
