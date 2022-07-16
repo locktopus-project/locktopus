@@ -1,22 +1,18 @@
 package internal
 
-type VertexSet map[*Vertice]struct{}
+type VertexSet map[*Vertex]struct{}
 
-func (s VertexSet) Add(v *Vertice) {
+func (s VertexSet) Add(v *Vertex) {
 	s[v] = struct{}{}
 }
 
-func (s VertexSet) Remove(v *Vertice) {
+func (s VertexSet) Remove(v *Vertex) {
 	delete(s, v)
 }
 
-func (s VertexSet) Contains(v *Vertice) bool {
+func (s VertexSet) Contains(v *Vertex) bool {
 	_, ok := s[v]
 	return ok
-}
-
-func (s VertexSet) Len() int {
-	return len(s)
 }
 
 func (s VertexSet) Clear() {

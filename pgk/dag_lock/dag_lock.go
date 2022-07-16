@@ -26,8 +26,8 @@ const (
 	Unlocked        LockState = iota
 )
 
-// Vertice is a linked-list-based one-time mutex. Use NewVertice to create a new Vertice.
-type Vertice struct {
+// Vertex is a linked-list-based one-time mutex. Use NewVertex to create a new Vertex.
+type Vertex struct {
 	_mx             sync.Mutex
 	lockType        LockType
 	lockState       LockState
@@ -36,28 +36,25 @@ type Vertice struct {
 	children        VertexSet
 	releasedParents VertexSet
 	calledLock      bool
-	name            string
 }
 
 // NewVerice
-func NewVertice(lockType LockType, name string) *Vertice {
-	v := &Vertice{
+func NewVertex(lockType LockType) *Vertex {
+	v := &Vertex{
 		lockType:        lockType,
 		children:        make(VertexSet, 0),
 		parents:         make(VertexSet, 0),
 		releasedParents: make(VertexSet, 0),
-
-		name: name,
 	}
 
 	return v
 }
 
-func (v *Vertice) HasChildren() bool {
+func (v *Vertex) HasChildren() bool {
 	return len(v.children) > 0
 }
 
-func (v *Vertice) AddChild(child *Vertice) {
+func (v *Vertex) AddChild(child *Vertex) {
 	if child == nil {
 		panic("Unable to append nil child. Fix your logic or report a bug")
 	}
@@ -69,7 +66,7 @@ func (v *Vertice) AddChild(child *Vertice) {
 	defer v._mx.Unlock()
 
 	if child.HasChildren() {
-		panic("Unable to bind a Vertice that already has children. This may introduce a deadlock. Fix your logic or report a bug")
+		panic("Unable to bind a Vertex that already has children. This may introduce a deadlock. Fix your logic or report a bug")
 	}
 
 	if v.lockState == Unlocked {
@@ -94,11 +91,11 @@ func (v *Vertice) AddChild(child *Vertice) {
 }
 
 // Lock will not be acquired until all parents are unlocked.
-func (v *Vertice) Lock() {
+func (v *Vertex) Lock() {
 	v._mx.Lock()
 
 	if v.calledLock {
-		panic("Unable to lock: Vertice has already been locked. Fix your logic")
+		panic("Unable to lock: Vertex has already been locked. Fix your logic")
 	}
 	v.calledLock = true
 
@@ -110,16 +107,16 @@ func (v *Vertice) Lock() {
 	v.lockState = LockedByClient
 	v._mx.Unlock()
 
-	fmt.Println("v.lockState = LockedByClient", v.name)
+	fmt.Println("v.lockState = LockedByClient")
 }
 
 // LockChain performs Lock and returns chan, waiting for result of which equals to waiting for Lock finish. If the lock has been acquired immediately, the returned chan is ready for receving in place.
 // This is a helper method which may be used inside "select" statement.
-func (v *Vertice) LockChan() <-chan interface{} {
+func (v *Vertex) LockChan() <-chan interface{} {
 	v._mx.Lock()
 
 	if v.calledLock {
-		panic("Unable to lock: Vertice has already been locked. Fix your logic")
+		panic("Unable to lock: Vertex has already been locked. Fix your logic")
 	}
 	v.calledLock = true
 
@@ -150,7 +147,7 @@ func (v *Vertice) LockChan() <-chan interface{} {
 	return ch
 }
 
-func (v *Vertice) Unlock() {
+func (v *Vertex) Unlock() {
 	v._mx.Lock()
 
 	if v.lockState != LockedByClient {
@@ -165,22 +162,22 @@ func (v *Vertice) Unlock() {
 	v.refreshState()
 }
 
-func (v *Vertice) allParentsReleased() bool {
+func (v *Vertex) allParentsReleased() bool {
 	return len(v.releasedParents) == len(v.parents)
 }
 
-func (v *Vertice) hasParents() bool {
+func (v *Vertex) hasParents() bool {
 	return len(v.parents) > 0
 }
 
-func (v *Vertice) releaseReadParent(parent *Vertice) {
+func (v *Vertex) releaseReadParent(parent *Vertex) {
 	v._mx.Lock()
 	defer v._mx.Unlock()
 
 	v.releasedParents.Add(parent)
 }
 
-func (v *Vertice) unbindParent(parent *Vertice) {
+func (v *Vertex) unbindParent(parent *Vertex) {
 	v._mx.Lock()
 	defer v._mx.Unlock()
 
@@ -188,7 +185,7 @@ func (v *Vertice) unbindParent(parent *Vertice) {
 	v.parents.Remove(parent)
 }
 
-func (v *Vertice) refreshState() {
+func (v *Vertex) refreshState() {
 	v._mx.Lock()
 	defer v._mx.Unlock()
 
