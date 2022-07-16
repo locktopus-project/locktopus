@@ -32,9 +32,9 @@ type Vertice struct {
 	lockType        LockType
 	lockState       LockState
 	selfMx          sync.Mutex
-	parents         []*Vertice
-	children        []*Vertice
-	releasedParents []*Vertice
+	parents         VertexSet
+	children        VertexSet
+	releasedParents VertexSet
 	calledLock      bool
 	name            string
 }
@@ -43,9 +43,9 @@ type Vertice struct {
 func NewVertice(lockType LockType, name string) *Vertice {
 	v := &Vertice{
 		lockType:        lockType,
-		children:        make([]*Vertice, 0),
-		parents:         make([]*Vertice, 0),
-		releasedParents: make([]*Vertice, 0),
+		children:        make(VertexSet, 0),
+		parents:         make(VertexSet, 0),
+		releasedParents: make(VertexSet, 0),
 
 		name: name,
 	}
@@ -84,8 +84,8 @@ func (v *Vertice) AddChild(child *Vertice) {
 		panic("Cannot bind released child. Fix your logic")
 	}
 
-	child.parents = append(child.parents, v)
-	v.children = append(v.children, child)
+	child.parents.Add(v)
+	v.children.Add(child)
 
 	if child.lockState == Created {
 		child.selfMx.Lock()
@@ -113,7 +113,7 @@ func (v *Vertice) Lock() {
 	fmt.Println("v.lockState = LockedByClient", v.name)
 }
 
-// LockChain returns a channel which is immediately ready to receive from if the lock has been acquired.
+// LockChain performs Lock and returns chan, waiting for result of which equals to waiting for Lock finish. If the lock has been acquired immediately, the returned chan is ready for receving in place.
 // This is a helper method which may be used inside "select" statement.
 func (v *Vertice) LockChan() <-chan interface{} {
 	v._mx.Lock()
@@ -177,32 +177,15 @@ func (v *Vertice) releaseReadParent(parent *Vertice) {
 	v._mx.Lock()
 	defer v._mx.Unlock()
 
-	for _, releasedRead := range v.releasedParents {
-		if releasedRead == parent {
-			return
-		}
-	}
-
-	v.releasedParents = append(v.releasedParents, parent)
+	v.releasedParents.Add(parent)
 }
 
 func (v *Vertice) unbindParent(parent *Vertice) {
 	v._mx.Lock()
 	defer v._mx.Unlock()
 
-	for i, releasedRead := range v.releasedParents {
-		if releasedRead == parent {
-			v.releasedParents = append(v.releasedParents[:i], v.releasedParents[i+1:]...)
-			break
-		}
-	}
-
-	for i, p := range v.parents {
-		if p == parent {
-			v.parents = append(v.parents[:i], v.parents[i+1:]...)
-			break
-		}
-	}
+	v.releasedParents.Remove(parent)
+	v.parents.Remove(parent)
 }
 
 func (v *Vertice) refreshState() {
@@ -211,13 +194,13 @@ func (v *Vertice) refreshState() {
 
 	if !v.hasParents() {
 		if v.lockState == Unlocked {
-			for _, node := range v.children {
+			for node := range v.children {
 				node.unbindParent(v)
 				node.refreshState()
 			}
 
-			v.children = []*Vertice{}
-			v.releasedParents = []*Vertice{}
+			v.children.Clear()
+			v.releasedParents.Clear()
 		}
 	}
 
@@ -230,7 +213,7 @@ func (v *Vertice) refreshState() {
 				return
 			}
 
-			for _, node := range v.children {
+			for node := range v.children {
 				if node.lockType == LockTypeWrite {
 					continue
 				}
