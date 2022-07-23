@@ -1,11 +1,13 @@
 /*
 https://en.wikipedia.org/wiki/Directed_acyclic_graph
 */
-package internal
+package daglock
 
 import (
 	"fmt"
 	"sync"
+
+	internal "github.com/xshkut/distributed-lock/pgk/set"
 )
 
 type LockType int8
@@ -32,9 +34,9 @@ type Vertex struct {
 	lockType        LockType
 	lockState       LockState
 	selfMx          sync.Mutex
-	parents         VertexSet
-	children        VertexSet
-	releasedParents VertexSet
+	parents         internal.Set[*Vertex]
+	children        internal.Set[*Vertex]
+	releasedParents internal.Set[*Vertex]
 	calledLock      bool
 }
 
@@ -42,9 +44,9 @@ type Vertex struct {
 func NewVertex(lockType LockType) *Vertex {
 	v := &Vertex{
 		lockType:        lockType,
-		children:        make(VertexSet, 0),
-		parents:         make(VertexSet, 0),
-		releasedParents: make(VertexSet, 0),
+		children:        make(internal.Set[*Vertex], 0),
+		parents:         make(internal.Set[*Vertex], 0),
+		releasedParents: make(internal.Set[*Vertex], 0),
 	}
 
 	return v
@@ -112,7 +114,7 @@ func (v *Vertex) Lock() {
 
 // LockChain performs Lock and returns chan, waiting for result of which equals to waiting for Lock finish. If the lock has been acquired immediately, the returned chan is ready for receving in place.
 // This is a helper method which may be used inside "select" statement.
-func (v *Vertex) LockChan() <-chan interface{} {
+func (v *Vertex) LockChan() <-chan struct{} {
 	v._mx.Lock()
 
 	if v.calledLock {
@@ -121,9 +123,9 @@ func (v *Vertex) LockChan() <-chan interface{} {
 	v.calledLock = true
 
 	v._mx.Unlock()
-	ch := make(chan interface{}, 1)
+	ch := make(chan struct{}, 1)
 
-	ctrlCh := make(chan interface{})
+	ctrlCh := make(chan struct{})
 
 	go func() {
 		v.selfMx.Lock()

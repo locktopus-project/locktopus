@@ -5,7 +5,7 @@ import (
 )
 
 func main() {
-	a := make(map[string]interface{})
+	a := make(map[string]struct{})
 
 	for i := 0; i <= 255; i++ {
 		fmt.Println(i)

@@ -1,4 +1,4 @@
-package internal
+package daglock
 
 import (
 	"fmt"
@@ -126,6 +126,7 @@ func TestLockChan_WaitIfLocked(t *testing.T) {
 
 	go func() {
 		v1.Lock()
+		_ = v1
 		v1.Unlock()
 	}()
 
