@@ -37,32 +37,38 @@ type LockSpace struct {
 	mx              sync.Mutex
 	segmentRegistry setCounter.SetCounter
 	lockSurface     map[string][]lockRef
+	rootRef         segmentRef
 }
 
 type segmentRef uintptr
 
 func NewLockSpace() *LockSpace {
-	return &LockSpace{
+	ls := LockSpace{
 		segmentRegistry: setCounter.NewSetCounter(),
 		lockSurface:     make(map[string][]lockRef),
 	}
+
+	ls.rootRef = ls.storeSegment("root")
+
+	return &ls
 }
 
 // LockGroup returns chan which signals when all locks are acquired.
-func (ls *LockSpace) LockGroup(leases []lease, unlock <-chan struct{}) <-chan struct{} {
+// Use second argument to unlock the group when the lock can be released.
+// The returned chan can be used to retrieve the reference to the second argument. This way you can ensure not to unlock the group before it acquires the lock.
+// It is safe to call LockGroup multiple times.
+func (ls *LockSpace) LockGroup(leases []lease, unlock chan interface{}) <-chan chan<- interface{} {
 	vertexes := make([]*dagLock.Vertex, len(leases))
-	segmentsList := make([]string, len(leases))
 
 	ls.mx.Lock()
 
-	paths := make([]string, len(leases))
+	// paths := make([]string, len(leases))
 	segmentRefses := make([][]segmentRef, len(leases))
 
 	for i, record := range leases {
-		segmentRefses[i] = ls.storeSegments(record.path)
-		segmentsList = append(segmentsList, record.path...)
+		segmentRefses[i] = append([]segmentRef{ls.rootRef}, ls.storeSegments(record.path)...)
 
-		paths[i] = concatSegmentRefs(segmentRefses[i])
+		// paths[i] = concatSegmentRefs(segmentRefses[i])
 	}
 
 	groupVertexes := make(set.Set[*dagLock.Vertex])
@@ -111,20 +117,23 @@ func (ls *LockSpace) LockGroup(leases []lease, unlock <-chan struct{}) <-chan st
 				continue
 			}
 
-			alreadyBound := false
+			groupHasBounding := false
 			for _, existingRef := range existingRefs {
 				if groupVertexes.Has(existingRef.r) {
-					alreadyBound = true
+					groupHasBounding = true
 					break
 				}
 			}
 
-			if alreadyBound {
+			if groupHasBounding {
 				continue
 			}
 
-			if existingRefs[0].t == head {
-				existingRefs[0].r.AddChild(vertex)
+			for i := len(existingRefs) - 1; i >= 0; i-- {
+				if existingRefs[i].t == head {
+					existingRefs[i].r.AddChild(vertex)
+					break
+				}
 			}
 
 			ls.lockSurface[path] = append(existingRefs, lockRef{t: refType, r: vertex})
@@ -141,40 +150,42 @@ func (ls *LockSpace) LockGroup(leases []lease, unlock <-chan struct{}) <-chan st
 			v.Unlock()
 		}
 
-		for _, s := range segmentsList {
-			ls.releaseSegment(s)
+		for _, l := range leases {
+			ls.releaseSegments(l.path)
 		}
 
-		// TODO: implement cleaning stalled paths
+		// TODO: implement cleaning map
 	}()
 
 	ls.mx.Unlock()
 
-	lockCH := make(chan struct{}, 1)
+	groupCh := make(chan chan<- interface{}, 1)
 
 	for i, v := range vertexes {
-		lockCh := v.LockChan()
+		vertexLock := v.LockChan()
 
 		select {
-		case <-lockCh:
+		case <-vertexLock:
 			continue
 		default:
 			go func() {
-				<-lockCh
+				<-vertexLock
 				for _, v := range vertexes[i+1:] {
 					v.Lock()
 				}
 
-				close(lockCH)
+				groupCh <- unlock
+				close(groupCh)
 			}()
 
-			return lockCH
+			return groupCh
 		}
 
 	}
 
-	close(lockCH)
-	return lockCH
+	groupCh <- unlock
+	close(groupCh)
+	return groupCh
 }
 
 // func cleanLockSurface(ls *LockSpace, ch <-chan []segmentRef) {
@@ -211,8 +222,8 @@ func (ls *LockSpace) releaseSegment(segment string) {
 	ls.segmentRegistry.Release(segment)
 }
 
-// func (ls *LockSpace) releaseSegments(segments []string) {
-// 	for _, s := range segments {
-// 		ls.releaseSegment(s)
-// 	}
-// }
+func (ls *LockSpace) releaseSegments(segments []string) {
+	for _, s := range segments {
+		ls.releaseSegment(s)
+	}
+}
