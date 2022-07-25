@@ -441,3 +441,104 @@ func TestNewVertice_StackedReadsLockIndependently_2(t *testing.T) {
 
 	v2.Lock()
 }
+
+func TestNewVertice_UnlockedShouldHaveNotChildren(t *testing.T) {
+	v1 := NewVertex(LockTypeRead)
+	v2 := NewVertex(LockTypeRead)
+	v3 := NewVertex(LockTypeWrite)
+	v4 := NewVertex(LockTypeWrite)
+	v5 := NewVertex(LockTypeRead)
+	v6 := NewVertex(LockTypeRead)
+	v7 := NewVertex(LockTypeWrite)
+	v8 := NewVertex(LockTypeRead)
+	v9 := NewVertex(LockTypeWrite)
+
+	v1.AddChild(v2)
+	v2.AddChild(v3)
+	v3.AddChild(v4)
+	v4.AddChild(v5)
+	v5.AddChild(v6)
+	v6.AddChild(v7)
+	v7.AddChild(v8)
+	v8.AddChild(v9)
+
+	v1.Lock()
+	v1.Unlock()
+	v2.Lock()
+	v2.Unlock()
+
+	if v1.HasChildren() {
+		t.Error("Expected v1 to have no children")
+	}
+	if v2.HasChildren() {
+		t.Error("Expected v2 to have no children")
+	}
+
+	v3.Lock()
+	v3.Unlock()
+
+	if v3.HasChildren() {
+		t.Error("Expected v3 to have no children")
+	}
+
+	v4.Lock()
+	v4.Unlock()
+
+	if v4.HasChildren() {
+		t.Error("Expected v4 to have no children")
+	}
+
+	v5.Lock()
+	v5.Unlock()
+
+	if v5.HasChildren() {
+		t.Error("Expected v5 to have no children")
+	}
+
+	v6.Lock()
+	v6.Unlock()
+
+	if v6.HasChildren() {
+		t.Error("Expected v6 to have no children")
+	}
+
+	v7.Lock()
+	v7.Unlock()
+
+	if v7.HasChildren() {
+		t.Error("Expected v7 to have no children")
+	}
+
+	v8.Lock()
+	v8.Unlock()
+
+	if v8.HasChildren() {
+		t.Error("Expected v8 to have no children")
+	}
+}
+
+func TestAddChild_WriteAfterUnlockedStackedRead(t *testing.T) {
+	v1 := NewVertex(LockTypeRead)
+	v2 := NewVertex(LockTypeRead)
+	v3 := NewVertex(LockTypeWrite)
+
+	v1.AddChild(v2)
+
+	v2.Lock()
+	v2.Unlock()
+
+	v2.AddChild(v3)
+
+	v3lock := v3.LockChan()
+
+	select {
+	case <-v3lock:
+		t.Error("Expected v3 to be locked")
+	default:
+	}
+
+	v1.Lock()
+	v1.Unlock()
+
+	<-v3lock
+}

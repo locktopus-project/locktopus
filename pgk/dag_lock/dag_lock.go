@@ -71,7 +71,7 @@ func (v *Vertex) AddChild(child *Vertex) {
 		panic("Unable to bind a Vertex that already has children. This may introduce a deadlock. Fix your logic or report a bug")
 	}
 
-	if v.lockState == Unlocked {
+	if v.lockState == Unlocked && !v.hasParents() {
 		// no-op
 		return
 	}
