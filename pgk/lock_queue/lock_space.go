@@ -9,13 +9,18 @@ import (
 	setCounter "github.com/xshkut/distributed-lock/pgk/set_counter"
 )
 
-type lease struct {
-	lockType dagLock.LockType
+type LockType = dagLock.LockType
+
+const LockTypeRead LockType = dagLock.LockTypeRead
+const LockTypeWrite LockType = dagLock.LockTypeWrite
+
+type resourceLock struct {
+	lockType LockType
 	path     []string
 }
 
-func NewLease(lockType dagLock.LockType, path []string) lease {
-	return lease{
+func NewResourceLock(lockType dagLock.LockType, path []string) resourceLock {
+	return resourceLock{
 		lockType: lockType,
 		path:     path,
 	}
@@ -53,18 +58,22 @@ func NewLockSpace() *LockSpace {
 	return &ls
 }
 
-type LockWaiter struct {
+type Lock struct {
 	ch chan Unlocker
 	u  Unlocker
 }
 
-func (l LockWaiter) Wait() Unlocker {
+// Acquire returns when the lock is acquired.
+// You may think of it as the casual method Lock from sync.Mutex.
+// The reason why the name differs is that the lock actually starts its lifecycle within LockGroup call.
+// Use the returned value to unlock the group.
+func (l Lock) Acquire() Unlocker {
 	<-l.ch
 
 	return l.u
 }
 
-func (l LockWaiter) release(u Unlocker) {
+func (l Lock) makeReady(u Unlocker) {
 	l.u = u
 	l.ch <- l.u
 	close(l.ch)
@@ -84,12 +93,12 @@ func (u Unlocker) Unlock() {
 	close(u.ch)
 }
 
-// LockGroup returns chan that signals when all locks are acquired.
+// LockGroup is used to lock a group of resourceLock's.
 // You can pass you own chan as the second argument (unlock) and use it to unlock the group.
 // The returned chan can be used to receive the reference to the second argument (unlock) if provided.
 // If unlock is not provided, it is made internally. This is the preferred way to ensure you won't unlock the group before it acquires the lock.
 // It is safe to call LockGroup multiple times.
-func (ls *LockSpace) LockGroup(group []lease, unlocker ...Unlocker) LockWaiter {
+func (ls *LockSpace) LockGroup(group []resourceLock, unlocker ...Unlocker) Lock {
 	vertexes := make([]*dagLock.Vertex, len(group))
 	var u Unlocker
 
@@ -200,7 +209,7 @@ func (ls *LockSpace) LockGroup(group []lease, unlocker ...Unlocker) LockWaiter {
 
 	ls.mx.Unlock()
 
-	lockWaiter := LockWaiter{
+	lockWaiter := Lock{
 		u:  u,
 		ch: make(chan Unlocker, 1),
 	}
@@ -218,7 +227,7 @@ func (ls *LockSpace) LockGroup(group []lease, unlocker ...Unlocker) LockWaiter {
 					v.Lock()
 				}
 
-				lockWaiter.release(u)
+				lockWaiter.makeReady(u)
 			}()
 
 			return lockWaiter
@@ -226,7 +235,7 @@ func (ls *LockSpace) LockGroup(group []lease, unlocker ...Unlocker) LockWaiter {
 
 	}
 
-	lockWaiter.release(u)
+	lockWaiter.makeReady(u)
 	return lockWaiter
 }
 
