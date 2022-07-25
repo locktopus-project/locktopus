@@ -53,19 +53,60 @@ func NewLockSpace() *LockSpace {
 	return &ls
 }
 
-// LockGroup returns chan which signals when all locks are acquired.
-// Use second argument to unlock the group when the lock can be released.
-// The returned chan can be used to retrieve the reference to the second argument. This way you can ensure not to unlock the group before it acquires the lock.
+type LockWaiter struct {
+	ch chan Unlocker
+	u  Unlocker
+}
+
+func (l LockWaiter) Wait() Unlocker {
+	<-l.ch
+
+	return l.u
+}
+
+func (l LockWaiter) release(u Unlocker) {
+	l.u = u
+	l.ch <- l.u
+	close(l.ch)
+}
+
+type Unlocker struct {
+	ch chan struct{}
+}
+
+func NewUnlocker() Unlocker {
+	return Unlocker{
+		ch: make(chan struct{}),
+	}
+}
+
+func (u Unlocker) Unlock() {
+	close(u.ch)
+}
+
+// LockGroup returns chan that signals when all locks are acquired.
+// You can pass you own chan as the second argument (unlock) and use it to unlock the group.
+// The returned chan can be used to receive the reference to the second argument (unlock) if provided.
+// If unlock is not provided, it is made internally. This is the preferred way to ensure you won't unlock the group before it acquires the lock.
 // It is safe to call LockGroup multiple times.
-func (ls *LockSpace) LockGroup(leases []lease, unlock chan interface{}) <-chan chan<- interface{} {
-	vertexes := make([]*dagLock.Vertex, len(leases))
+func (ls *LockSpace) LockGroup(group []lease, unlocker ...Unlocker) LockWaiter {
+	vertexes := make([]*dagLock.Vertex, len(group))
+	var u Unlocker
+
+	if len(unlocker) > 1 {
+		panic("Passed more than one unlocker. Review your logic")
+	} else if len(unlocker) == 1 {
+		u = unlocker[0]
+	} else {
+		u = NewUnlocker()
+	}
 
 	ls.mx.Lock()
 
 	// paths := make([]string, len(leases))
-	segmentRefses := make([][]segmentRef, len(leases))
+	segmentRefses := make([][]segmentRef, len(group))
 
-	for i, record := range leases {
+	for i, record := range group {
 		segmentRefses[i] = append([]segmentRef{ls.rootRef}, ls.storeSegments(record.path)...)
 
 		// paths[i] = concatSegmentRefs(segmentRefses[i])
@@ -74,7 +115,7 @@ func (ls *LockSpace) LockGroup(leases []lease, unlock chan interface{}) <-chan c
 	groupVertexes := make(set.Set[*dagLock.Vertex])
 
 	for i, segmentRefs := range segmentRefses {
-		vertex := dagLock.NewVertex(leases[i].lockType)
+		vertex := dagLock.NewVertex(group[i].lockType)
 		vertexes[i] = vertex
 		groupVertexes.Add(vertex)
 
@@ -141,7 +182,7 @@ func (ls *LockSpace) LockGroup(leases []lease, unlock chan interface{}) <-chan c
 	}
 
 	go func() {
-		<-unlock
+		<-u.ch
 
 		ls.mx.Lock()
 		defer ls.mx.Unlock()
@@ -150,7 +191,7 @@ func (ls *LockSpace) LockGroup(leases []lease, unlock chan interface{}) <-chan c
 			v.Unlock()
 		}
 
-		for _, l := range leases {
+		for _, l := range group {
 			ls.releaseSegments(l.path)
 		}
 
@@ -159,7 +200,10 @@ func (ls *LockSpace) LockGroup(leases []lease, unlock chan interface{}) <-chan c
 
 	ls.mx.Unlock()
 
-	groupCh := make(chan chan<- interface{}, 1)
+	lockWaiter := LockWaiter{
+		u:  u,
+		ch: make(chan Unlocker, 1),
+	}
 
 	for i, v := range vertexes {
 		vertexLock := v.LockChan()
@@ -174,18 +218,16 @@ func (ls *LockSpace) LockGroup(leases []lease, unlock chan interface{}) <-chan c
 					v.Lock()
 				}
 
-				groupCh <- unlock
-				close(groupCh)
+				lockWaiter.release(u)
 			}()
 
-			return groupCh
+			return lockWaiter
 		}
 
 	}
 
-	groupCh <- unlock
-	close(groupCh)
-	return groupCh
+	lockWaiter.release(u)
+	return lockWaiter
 }
 
 // func cleanLockSurface(ls *LockSpace, ch <-chan []segmentRef) {
