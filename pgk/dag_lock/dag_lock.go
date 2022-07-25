@@ -95,6 +95,7 @@ func (v *Vertex) AddChild(child *Vertex) {
 // Lock will not be acquired until all parents are unlocked.
 func (v *Vertex) Lock() {
 	v._mx.Lock()
+	v._mx.TryLock()
 
 	if v.calledLock {
 		panic("Unable to lock: Vertex has already been locked. Fix your logic")
@@ -108,8 +109,6 @@ func (v *Vertex) Lock() {
 	v._mx.Lock()
 	v.lockState = LockedByClient
 	v._mx.Unlock()
-
-	fmt.Println("v.lockState = LockedByClient")
 }
 
 // LockChain performs Lock and returns chan, waiting for result of which equals to waiting for Lock finish. If the lock has been acquired immediately, the returned chan is ready for receving in place.
@@ -123,7 +122,7 @@ func (v *Vertex) LockChan() <-chan struct{} {
 	v.calledLock = true
 
 	v._mx.Unlock()
-	ch := make(chan struct{}, 1)
+	ch := make(chan struct{})
 
 	ctrlCh := make(chan struct{})
 
@@ -134,10 +133,9 @@ func (v *Vertex) LockChan() <-chan struct{} {
 		v.lockState = LockedByClient
 		v._mx.Unlock()
 
-		ch <- struct{}{}
 		close(ch)
 
-		ctrlCh <- struct{}{}
+		close(ctrlCh)
 	}()
 
 	if v.lockState == LockedByParents {
