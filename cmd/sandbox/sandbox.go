@@ -1,19 +1,9 @@
 package main
 
-import (
-	"fmt"
-)
+import "fmt"
 
 func main() {
-	ch := make(chan int)
+	a := []int{1, 2, 3, 4, 5}
 
-	go func() {
-		close(ch)
-	}()
-
-	for range ch {
-		fmt.Println(2)
-	}
-
-	fmt.Println(1)
+	fmt.Println(a[5:])
 }
