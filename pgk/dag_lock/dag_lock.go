@@ -71,8 +71,7 @@ func (v *Vertex) AddChild(child *Vertex) {
 		panic("Unable to bind a Vertex that already has children. This may introduce a deadlock. Fix your logic or report a bug")
 	}
 
-	if v.lockState == Unlocked && !v.hasParents() {
-		// no-op
+	if v.Useless() {
 		return
 	}
 
@@ -165,6 +164,11 @@ func (v *Vertex) Unlock() {
 	v._mx.Unlock()
 
 	v.refreshState()
+}
+
+// Useless means that adding children to v has no point. However, doig so is not forbidden and will result in no-op.
+func (v *Vertex) Useless() bool {
+	return v.lockState == Unlocked && !v.hasParents()
 }
 
 func (v *Vertex) allParentsReleased() bool {

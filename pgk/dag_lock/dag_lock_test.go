@@ -542,3 +542,63 @@ func TestAddChild_WriteAfterUnlockedStackedRead(t *testing.T) {
 
 	<-v3lock
 }
+
+func TestUseless(t *testing.T) {
+	v1 := NewVertex(LockTypeRead)
+	v2 := NewVertex(LockTypeRead)
+	v3 := NewVertex(LockTypeWrite)
+	v4 := NewVertex(LockTypeWrite)
+
+	if v1.Useless() {
+		t.Error("Expected v1 not to be useless")
+	}
+
+	if v2.Useless() {
+		t.Error("Expected v2 not to be useless")
+	}
+
+	if v3.Useless() {
+		t.Error("Expected v3 not to be useless")
+	}
+
+	if v4.Useless() {
+		t.Error("Expected v4 not to be useless")
+	}
+
+	v1.AddChild(v2)
+
+	v2.Lock()
+	v2.Unlock()
+
+	if v2.Useless() {
+		t.Error("Expected v1 not to be useless")
+	}
+
+	v2.AddChild(v3)
+	v3.AddChild(v4)
+
+	v1.Lock()
+	v1.Unlock()
+
+	if !v1.Useless() {
+		t.Error("Expected v1 to be useless")
+	}
+
+	if !v2.Useless() {
+		t.Error("Expected v1 to be useless")
+	}
+
+	v3.Lock()
+	v3.Unlock()
+
+	if !v3.Useless() {
+		t.Error("Expected v3 to be useless")
+	}
+
+	v4.Lock()
+	v4.Unlock()
+
+	if !v4.Useless() {
+		t.Error("Expected v4 to be useless")
+	}
+}
