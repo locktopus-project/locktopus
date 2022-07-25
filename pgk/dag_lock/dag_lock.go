@@ -83,8 +83,16 @@ func (v *Vertex) AddChild(child *Vertex) {
 		panic("Cannot bind released child. Fix your logic")
 	}
 
+	if !v.hasParents() && v.lockState < Released {
+		v.lockState = Released
+	}
+
 	child.parents.Add(v)
 	v.children.Add(child)
+
+	if v.lockState > LockedByParents && child.lockType == LockTypeRead && v.lockType == LockTypeRead {
+		return
+	}
 
 	if child.lockState == Created {
 		child.selfMx.Lock()
@@ -95,7 +103,6 @@ func (v *Vertex) AddChild(child *Vertex) {
 // Lock will not be acquired until all parents are unlocked.
 func (v *Vertex) Lock() {
 	v._mx.Lock()
-	v._mx.TryLock()
 
 	if v.calledLock {
 		panic("Unable to lock: Vertex has already been locked. Fix your logic")
@@ -115,34 +122,32 @@ func (v *Vertex) Lock() {
 // This is a helper method which may be used inside "select" statement.
 func (v *Vertex) LockChan() <-chan struct{} {
 	v._mx.Lock()
+	defer v._mx.Unlock()
 
 	if v.calledLock {
 		panic("Unable to lock: Vertex has already been locked. Fix your logic")
 	}
 	v.calledLock = true
 
-	v._mx.Unlock()
 	ch := make(chan struct{})
 
-	ctrlCh := make(chan struct{})
-
-	go func() {
-		v.selfMx.Lock()
-
-		v._mx.Lock()
+	ok := v.selfMx.TryLock()
+	if ok {
 		v.lockState = LockedByClient
-		v._mx.Unlock()
 
 		close(ch)
+	} else {
+		go func() {
+			v.selfMx.Lock()
 
-		close(ctrlCh)
-	}()
+			v._mx.Lock()
+			defer v._mx.Unlock()
 
-	if v.lockState == LockedByParents {
-		return ch
+			v.lockState = LockedByClient
+
+			close(ch)
+		}()
 	}
-
-	<-ctrlCh
 
 	return ch
 }

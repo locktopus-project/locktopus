@@ -1,11 +1,13 @@
 package internal
 
 import (
+	"fmt"
 	"reflect"
 	"sync"
 	"testing"
 
 	internal "github.com/xshkut/distributed-lock/pgk/dag_lock"
+	sliceAppender "github.com/xshkut/distributed-lock/pgk/slice_appender"
 )
 
 func assertWaiterIsWaiting(t *testing.T, lw Lock) {
@@ -286,7 +288,7 @@ func TestLockSpace_PartialReadOverlapping(t *testing.T) {
 
 func TestLockSpace_Complex_1(t *testing.T) {
 	ls := NewLockSpace()
-	order := []int{}
+	order := sliceAppender.NewSliceAppender[int]()
 
 	lr1 := NewResourceLock(internal.LockTypeRead, []string{"a"})
 	w1 := ls.LockGroup([]resourceLock{lr1})
@@ -302,11 +304,11 @@ func TestLockSpace_Complex_1(t *testing.T) {
 	w3b := ls.LockGroup([]resourceLock{lr3b})
 
 	wg := sync.WaitGroup{}
-	wg.Add(3)
+	wg.Add(4)
 
 	go func() {
 		u := w3b.Acquire()
-		order = append(order, 3)
+		order.Append(3)
 		u.Unlock()
 
 		wg.Done()
@@ -314,7 +316,7 @@ func TestLockSpace_Complex_1(t *testing.T) {
 
 	go func() {
 		u := w3a.Acquire()
-		order = append(order, 3)
+		order.Append(3)
 		u.Unlock()
 
 		wg.Done()
@@ -322,7 +324,7 @@ func TestLockSpace_Complex_1(t *testing.T) {
 
 	go func() {
 		u := w2.Acquire()
-		order = append(order, 2)
+		order.Append(2)
 		u.Unlock()
 
 		wg.Done()
@@ -330,7 +332,7 @@ func TestLockSpace_Complex_1(t *testing.T) {
 
 	go func() {
 		u := w1.Acquire()
-		order = append(order, 1)
+		order.Append(1)
 		u.Unlock()
 
 		wg.Done()
@@ -338,12 +340,12 @@ func TestLockSpace_Complex_1(t *testing.T) {
 
 	wg.Wait()
 
-	assertOrder(t, order, []int{1, 2, 3})
+	assertOrder(t, order.Value(), []int{1, 2, 3, 3})
 }
 
 func TestLockSpace_Complex_2(t *testing.T) {
 	ls := NewLockSpace()
-	order := []int{}
+	order := sliceAppender.NewSliceAppender[int]()
 
 	wg := sync.WaitGroup{}
 	wg.Add(10)
@@ -384,7 +386,7 @@ func TestLockSpace_Complex_2(t *testing.T) {
 
 	go func() {
 		u := w10.Acquire()
-		order = append(order, 4)
+		order.Append(4)
 		u.Unlock()
 
 		wg.Done()
@@ -392,7 +394,7 @@ func TestLockSpace_Complex_2(t *testing.T) {
 
 	go func() {
 		u := w9.Acquire()
-		order = append(order, 4)
+		order.Append(4)
 		u.Unlock()
 
 		wg.Done()
@@ -400,7 +402,7 @@ func TestLockSpace_Complex_2(t *testing.T) {
 
 	go func() {
 		u := w8.Acquire()
-		order = append(order, 4)
+		order.Append(4)
 		u.Unlock()
 
 		wg.Done()
@@ -408,7 +410,7 @@ func TestLockSpace_Complex_2(t *testing.T) {
 
 	go func() {
 		u := w7.Acquire()
-		order = append(order, 4)
+		order.Append(4)
 		u.Unlock()
 
 		wg.Done()
@@ -416,39 +418,43 @@ func TestLockSpace_Complex_2(t *testing.T) {
 
 	go func() {
 		u := w6.Acquire()
-		order = append(order, 3)
+		order.Append(3)
 		u.Unlock()
 
+		fmt.Println(order)
 		wg.Done()
 	}()
 
 	go func() {
 		u := w5.Acquire()
-		order = append(order, 3)
+		order.Append(3)
 		u.Unlock()
 
+		fmt.Println(order)
 		wg.Done()
 	}()
 
 	go func() {
 		u := w4.Acquire()
-		order = append(order, 3)
+		order.Append(3)
 		u.Unlock()
 
+		fmt.Println(order)
 		wg.Done()
 	}()
 
 	go func() {
 		u := w3.Acquire()
-		order = append(order, 3)
+		order.Append(3)
 		u.Unlock()
 
+		fmt.Println(order)
 		wg.Done()
 	}()
 
 	go func() {
 		u := w2.Acquire()
-		order = append(order, 2)
+		order.Append(2)
 		u.Unlock()
 
 		wg.Done()
@@ -456,7 +462,7 @@ func TestLockSpace_Complex_2(t *testing.T) {
 
 	go func() {
 		u := w1.Acquire()
-		order = append(order, 1)
+		order.Append(1)
 		u.Unlock()
 
 		wg.Done()
@@ -464,5 +470,5 @@ func TestLockSpace_Complex_2(t *testing.T) {
 
 	wg.Wait()
 
-	assertOrder(t, order, []int{1, 2, 3, 3, 3, 3, 4, 4, 4, 4})
+	assertOrder(t, order.Value(), []int{1, 2, 3, 3, 3, 3, 4, 4, 4, 4})
 }

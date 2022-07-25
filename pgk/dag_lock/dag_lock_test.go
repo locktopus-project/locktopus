@@ -118,6 +118,20 @@ func TestLockChan_NoReceiveLocked(t *testing.T) {
 	}
 }
 
+func TestLockChan_ImmediateReceiveReadStacks(t *testing.T) {
+	v1 := NewVertex(LockTypeRead)
+	v2 := NewVertex(LockTypeRead)
+
+	v1.AddChild(v2)
+
+	select {
+	case <-v2.LockChan():
+		return
+	default:
+		t.Error("Expected to receive from LockChan immediately")
+	}
+}
+
 func TestLockChan_WaitIfLocked(t *testing.T) {
 	v1 := NewVertex(LockTypeWrite)
 
@@ -417,4 +431,13 @@ func TestNewVertice_EnsureStackedWritesAreAllBlocked(t *testing.T) {
 		t.Error("Second read is expected to be locked")
 	default:
 	}
+}
+
+func TestNewVertice_StackedReadsLockIndependently_2(t *testing.T) {
+	v1 := NewVertex(LockTypeRead)
+	v2 := NewVertex(LockTypeRead)
+
+	v1.AddChild(v2)
+
+	v2.Lock()
 }
