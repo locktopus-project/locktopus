@@ -42,22 +42,26 @@ type lockRef struct {
 	r *dagLock.Vertex
 }
 
-// LockSpace
+// LockSpace allows you to acquire an atomic lock for a set of ResourceLocks.
+// Use CreateAndRun() to create a new LockSpace and run its garbage collector. Stop() will stop the garbage collector.
 type LockSpace struct {
 	mx            sync.Mutex
 	segmentTokens setCounter.SetCounter
 	lockSurface   map[string][]lockRef
 	garbage       chan [][]tokenRef
 	rootRef       tokenRef
+	stop          *sync.WaitGroup
+	stopped       bool
 }
 
 type tokenRef uintptr
 
-func NewLockSpace() *LockSpace {
+func CreateAndRun() *LockSpace {
 	ls := LockSpace{
 		segmentTokens: setCounter.NewSetCounter(),
 		lockSurface:   make(map[string][]lockRef),
 		garbage:       make(chan [][]tokenRef, garbageBufferSize),
+		stop:          &sync.WaitGroup{},
 	}
 
 	ls.rootRef = ls.storeTokens([]string{""})[0]
@@ -67,8 +71,12 @@ func NewLockSpace() *LockSpace {
 	return &ls
 }
 
-func (ls *LockSpace) Destroy() {
+func (ls *LockSpace) Stop() {
+	ls.stopped = true
+
 	close(ls.garbage)
+
+	ls.stop.Wait()
 }
 
 // type Statistics struct {
@@ -120,6 +128,10 @@ func (u Unlocker) Unlock() {
 // If unlock is not provided, it is made internally. This is the preferred way to ensure you won't unlock the group before it acquires the lock.
 // It is safe to call LockGroup multiple times.
 func (ls *LockSpace) LockGroup(lockGroup []ResourceLock, unlocker ...Unlocker) Lock {
+	if ls.stopped {
+		panic("LockSpace is stopped")
+	}
+
 	vertexes := make([]*dagLock.Vertex, len(lockGroup))
 	var u Unlocker
 
@@ -154,7 +166,7 @@ func (ls *LockSpace) LockGroup(lockGroup []ResourceLock, unlocker ...Unlocker) L
 				refType = head
 			}
 
-			refsStack, ok := ls.lockSurface[path]
+			refStack, ok := ls.lockSurface[path]
 
 			if !ok {
 				ls.lockSurface[path] = []lockRef{{t: refType, r: vertex}}
@@ -164,17 +176,17 @@ func (ls *LockSpace) LockGroup(lockGroup []ResourceLock, unlocker ...Unlocker) L
 			if refType == head {
 				vertexBound := false
 				groupLocked := false
-				for i := len(refsStack) - 1; i >= 0; i-- {
-					if groupVertexes.Has(refsStack[i].r) {
+				for i := len(refStack) - 1; i >= 0; i-- {
+					if groupVertexes.Has(refStack[i].r) {
 						groupLocked = true
 						continue
 					}
 
-					if refsStack[i].t == head && vertexBound {
+					if refStack[i].t == head && vertexBound {
 						break
 					}
 
-					refsStack[i].r.AddChild(vertex)
+					refStack[i].r.AddChild(vertex)
 					vertexBound = true
 				}
 
@@ -186,7 +198,7 @@ func (ls *LockSpace) LockGroup(lockGroup []ResourceLock, unlocker ...Unlocker) L
 			}
 
 			groupLocked := false
-			for _, ref := range refsStack {
+			for _, ref := range refStack {
 				if groupVertexes.Has(ref.r) {
 					groupLocked = true
 					break
@@ -197,14 +209,14 @@ func (ls *LockSpace) LockGroup(lockGroup []ResourceLock, unlocker ...Unlocker) L
 				continue
 			}
 
-			for i := len(refsStack) - 1; i >= 0; i-- {
-				if refsStack[i].t == head {
-					refsStack[i].r.AddChild(vertex)
+			for i := len(refStack) - 1; i >= 0; i-- {
+				if refStack[i].t == head {
+					refStack[i].r.AddChild(vertex)
 					break
 				}
 			}
 
-			ls.lockSurface[path] = append(refsStack, lockRef{t: refType, r: vertex})
+			ls.lockSurface[path] = append(refStack, lockRef{t: refType, r: vertex})
 		}
 	}
 
@@ -278,6 +290,8 @@ func (ls *LockSpace) releaseTokens(segments []string) {
 }
 
 func cleanRefStacks(ls *LockSpace) {
+	exit := false
+
 	for {
 		segmentGroupList := make([][][]tokenRef, 0, 1)
 
@@ -286,6 +300,7 @@ func cleanRefStacks(ls *LockSpace) {
 			select {
 			case segmentGroup, closed := <-ls.garbage:
 				if closed {
+					exit = true
 					break
 				}
 				segmentGroupList = append(segmentGroupList, segmentGroup)
@@ -313,14 +328,14 @@ func cleanRefStacks(ls *LockSpace) {
 		ls.mx.Lock()
 
 		for path := range paths {
-			segmentRefs, ok := ls.lockSurface[path]
+			refStack, ok := ls.lockSurface[path]
 			if !ok {
 				continue
 			}
 
 			keepFrom := 0
 
-			for i, segmentRef := range segmentRefs {
+			for i, segmentRef := range refStack {
 				if !segmentRef.r.Useless() {
 					break
 				}
@@ -332,15 +347,19 @@ func cleanRefStacks(ls *LockSpace) {
 				continue
 			}
 
-			if keepFrom == len(segmentRefs) {
+			if keepFrom == len(refStack) {
 				delete(ls.lockSurface, path)
 				continue
 			}
 
-			ls.lockSurface[path] = segmentRefs[keepFrom:]
+			ls.lockSurface[path] = refStack[keepFrom:]
 		}
 
 		ls.mx.Unlock()
+
+		if exit {
+			break
+		}
 
 		time.Sleep(surfaceCleaningBufferingMs * time.Millisecond)
 	}

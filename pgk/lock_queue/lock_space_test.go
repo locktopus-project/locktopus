@@ -33,7 +33,7 @@ func assertOrder(t *testing.T, order []int, expected []int) {
 }
 
 func TestLockSpace_SecondArgumentIsReceivedFromChan(t *testing.T) {
-	ls := NewLockSpace()
+	ls := CreateAndRun()
 
 	lr := NewResourceLock(internal.LockTypeRead, []string{"a", "b", "c"})
 
@@ -46,7 +46,7 @@ func TestLockSpace_SecondArgumentIsReceivedFromChan(t *testing.T) {
 }
 
 func TestLockSpace_SingleGroupShouldBeLockedImmediately(t *testing.T) {
-	ls := NewLockSpace()
+	ls := CreateAndRun()
 
 	lr := NewResourceLock(internal.LockTypeRead, []string{"a", "b", "c"})
 
@@ -54,7 +54,7 @@ func TestLockSpace_SingleGroupShouldBeLockedImmediately(t *testing.T) {
 }
 
 func TestLockSpace_DuplicateRecordsShouldNotBringDeadlock(t *testing.T) {
-	ls := NewLockSpace()
+	ls := CreateAndRun()
 
 	lr1 := NewResourceLock(internal.LockTypeWrite, []string{"a", "b", "c"})
 	lr2 := NewResourceLock(internal.LockTypeWrite, []string{"a", "b", "c"})
@@ -63,7 +63,7 @@ func TestLockSpace_DuplicateRecordsShouldNotBringDeadlock(t *testing.T) {
 }
 
 func TestLockSpace_ConcurrentGroupShouldBlock(t *testing.T) {
-	ls := NewLockSpace()
+	ls := CreateAndRun()
 
 	lr1 := NewResourceLock(internal.LockTypeWrite, []string{"a", "b", "c"})
 	ls.LockGroup([]ResourceLock{lr1})
@@ -75,7 +75,7 @@ func TestLockSpace_ConcurrentGroupShouldBlock(t *testing.T) {
 }
 
 func TestLockSpace_EmptyPathShouldAlsoCauseBlock(t *testing.T) {
-	ls := NewLockSpace()
+	ls := CreateAndRun()
 
 	lr1 := NewResourceLock(internal.LockTypeWrite, []string{})
 	ls.LockGroup([]ResourceLock{lr1})
@@ -86,7 +86,7 @@ func TestLockSpace_EmptyPathShouldAlsoCauseBlock(t *testing.T) {
 }
 
 func TestLockSpace_TestRelease(t *testing.T) {
-	ls := NewLockSpace()
+	ls := CreateAndRun()
 
 	path := []string{"a", "b", "c"}
 
@@ -107,7 +107,7 @@ func TestLockSpace_TestRelease(t *testing.T) {
 }
 
 func TestLockSpace_ParallelWritesShouldSucced(t *testing.T) {
-	ls := NewLockSpace()
+	ls := CreateAndRun()
 
 	lr1 := NewResourceLock(internal.LockTypeWrite, []string{"a", "b", "1"})
 	w := ls.LockGroup([]ResourceLock{lr1})
@@ -119,7 +119,7 @@ func TestLockSpace_ParallelWritesShouldSucced(t *testing.T) {
 }
 
 func TestLockSpace_ParallelReadsShouldSucced(t *testing.T) {
-	ls := NewLockSpace()
+	ls := CreateAndRun()
 
 	lr1 := NewResourceLock(internal.LockTypeRead, []string{"a", "b", "1"})
 	w := ls.LockGroup([]ResourceLock{lr1})
@@ -131,7 +131,7 @@ func TestLockSpace_ParallelReadsShouldSucced(t *testing.T) {
 }
 
 func TestLockSpace_SequentialWritesShouldBlocked_Postfix(t *testing.T) {
-	ls := NewLockSpace()
+	ls := CreateAndRun()
 
 	lr1 := NewResourceLock(internal.LockTypeWrite, []string{"a", "b"})
 	ls.LockGroup([]ResourceLock{lr1})
@@ -143,7 +143,7 @@ func TestLockSpace_SequentialWritesShouldBlocked_Postfix(t *testing.T) {
 }
 
 func TestLockSpace_SequentialWritesShouldBlocked_Prefix(t *testing.T) {
-	ls := NewLockSpace()
+	ls := CreateAndRun()
 
 	lr1 := NewResourceLock(internal.LockTypeWrite, []string{"a", "b", "2"})
 	ls.LockGroup([]ResourceLock{lr1})
@@ -155,7 +155,7 @@ func TestLockSpace_SequentialWritesShouldBlocked_Prefix(t *testing.T) {
 }
 
 func TestLockSpace_AdjacentReadsDoNotBlockEachOther(t *testing.T) {
-	ls := NewLockSpace()
+	ls := CreateAndRun()
 
 	lr1 := NewResourceLock(internal.LockTypeWrite, []string{"a"})
 	w1 := ls.LockGroup([]ResourceLock{lr1})
@@ -234,7 +234,7 @@ func TestLockSpace_AdjacentReadsDoNotBlockEachOther(t *testing.T) {
 }
 
 func TestLockSpace_PartialWriteOverlapping(t *testing.T) {
-	ls := NewLockSpace()
+	ls := CreateAndRun()
 
 	rl1 := NewResourceLock(internal.LockTypeWrite, []string{"a", "1"})
 	rl2 := NewResourceLock(internal.LockTypeWrite, []string{"a", "2"})
@@ -264,7 +264,7 @@ func TestLockSpace_PartialWriteOverlapping(t *testing.T) {
 }
 
 func TestLockSpace_PartialReadOverlapping(t *testing.T) {
-	ls := NewLockSpace()
+	ls := CreateAndRun()
 
 	rl1 := NewResourceLock(internal.LockTypeWrite, []string{"a", "1"})
 	rl2 := NewResourceLock(internal.LockTypeWrite, []string{"a", "2"})
@@ -287,7 +287,7 @@ func TestLockSpace_PartialReadOverlapping(t *testing.T) {
 }
 
 func TestLockSpace_Complex_1(t *testing.T) {
-	ls := NewLockSpace()
+	ls := CreateAndRun()
 	order := sliceAppender.NewSliceAppender[int]()
 
 	lr1 := NewResourceLock(internal.LockTypeRead, []string{"a"})
@@ -344,7 +344,7 @@ func TestLockSpace_Complex_1(t *testing.T) {
 }
 
 func TestLockSpace_Complex_2(t *testing.T) {
-	ls := NewLockSpace()
+	ls := CreateAndRun()
 	order := sliceAppender.NewSliceAppender[int]()
 
 	wg := sync.WaitGroup{}
@@ -471,4 +471,32 @@ func TestLockSpace_Complex_2(t *testing.T) {
 	wg.Wait()
 
 	assertOrder(t, order.Value(), []int{1, 2, 3, 3, 3, 3, 4, 4, 4, 4})
+}
+
+func TestStop_StopAfterStop(t *testing.T) {
+	ls := CreateAndRun()
+
+	ls.Stop()
+
+	defer func() {
+		if r := recover(); r == nil {
+			t.Error("Expected panic")
+		}
+	}()
+
+	ls.Stop()
+}
+
+func TestStop_LockGroupAfterStop(t *testing.T) {
+	ls := CreateAndRun()
+
+	ls.Stop()
+
+	defer func() {
+		if r := recover(); r == nil {
+			t.Error("Expected panic")
+		}
+	}()
+
+	ls.LockGroup([]ResourceLock{NewResourceLock(LockTypeRead, []string{"a"})})
 }
