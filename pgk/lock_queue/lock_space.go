@@ -208,6 +208,8 @@ func (ls *LockSpace) LockGroup(lockGroup []ResourceLock, unlocker ...Unlocker) L
 		}
 	}
 
+	ls.mx.Unlock()
+
 	go func() {
 		<-u.ch
 
@@ -225,8 +227,6 @@ func (ls *LockSpace) LockGroup(lockGroup []ResourceLock, unlocker ...Unlocker) L
 
 		ls.garbage <- tokenRefGroup
 	}()
-
-	ls.mx.Unlock()
 
 	lockWaiter := Lock{
 		u:  u,
