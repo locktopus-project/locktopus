@@ -10,23 +10,23 @@ import (
 	setCounter "github.com/xshkut/distributed-lock/pgk/set_counter"
 )
 
-const garbageBufferSize = 10000
-const surfaceCleaningBufferingMs = 1000
-
 type LockType = dagLock.LockType
 
 const LockTypeRead LockType = dagLock.LockTypeRead
 const LockTypeWrite LockType = dagLock.LockTypeWrite
 
+const garbageBufferSize = 10000
+const surfaceCleaningBufferingMs = 1000
+
 type ResourceLock struct {
-	lockType LockType
-	path     []string
+	LockType LockType
+	Path     []string
 }
 
-func NewResourceLock(lockType dagLock.LockType, path []string) ResourceLock {
+func NewResourceLock(lockType LockType, path []string) ResourceLock {
 	return ResourceLock{
-		lockType: lockType,
-		path:     path,
+		LockType: lockType,
+		Path:     path,
 	}
 }
 
@@ -42,28 +42,33 @@ type lockRef struct {
 	r *dagLock.Vertex
 }
 
+// LockSpace
 type LockSpace struct {
-	mx              sync.Mutex
-	segmentRegistry setCounter.SetCounter
-	lockSurface     map[string][]lockRef
-	rootRef         segmentRef
-	surfaceGarbage  chan [][]segmentRef
+	mx          sync.Mutex
+	tokens      setCounter.SetCounter
+	lockSurface map[string][]lockRef
+	garbage     chan [][]segmentRef
+	rootRef     segmentRef
 }
 
 type segmentRef uintptr
 
 func NewLockSpace() *LockSpace {
 	ls := LockSpace{
-		segmentRegistry: setCounter.NewSetCounter(),
-		lockSurface:     make(map[string][]lockRef),
-		surfaceGarbage:  make(chan [][]segmentRef, garbageBufferSize),
+		tokens:      setCounter.NewSetCounter(),
+		lockSurface: make(map[string][]lockRef),
+		garbage:     make(chan [][]segmentRef, garbageBufferSize),
 	}
 
-	ls.rootRef = ls.storeSegment("root")
+	ls.rootRef = ls.storeSegment("")
 
 	go cleanLockSurfaceGarbage(&ls)
 
 	return &ls
+}
+
+func (ls *LockSpace) Destroy() {
+	close(ls.garbage)
 }
 
 type Lock struct {
@@ -123,13 +128,13 @@ func (ls *LockSpace) LockGroup(group []ResourceLock, unlocker ...Unlocker) Lock 
 	segmentGroup := make([][]segmentRef, len(group))
 
 	for i, record := range group {
-		segmentGroup[i] = append([]segmentRef{ls.rootRef}, ls.storeSegments(record.path)...)
+		segmentGroup[i] = append([]segmentRef{ls.rootRef}, ls.storeSegments(record.Path)...)
 	}
 
 	groupVertexes := make(set.Set[*dagLock.Vertex])
 
 	for i, segmentRefs := range segmentGroup {
-		vertex := dagLock.NewVertex(group[i].lockType)
+		vertex := dagLock.NewVertex(group[i].LockType)
 		vertexes[i] = vertex
 		groupVertexes.Add(vertex)
 
@@ -205,12 +210,12 @@ func (ls *LockSpace) LockGroup(group []ResourceLock, unlocker ...Unlocker) Lock 
 		}
 
 		for _, l := range group {
-			ls.releaseSegments(l.path)
+			ls.releaseSegments(l.Path)
 		}
 
 		ls.mx.Unlock()
 
-		ls.surfaceGarbage <- segmentGroup
+		ls.garbage <- segmentGroup
 	}()
 
 	ls.mx.Unlock()
@@ -246,7 +251,7 @@ func (ls *LockSpace) LockGroup(group []ResourceLock, unlocker ...Unlocker) Lock 
 }
 
 func (ls *LockSpace) storeSegment(segment string) segmentRef {
-	p := ls.segmentRegistry.Store(segment)
+	p := ls.tokens.Store(segment)
 
 	return segmentRef(unsafe.Pointer(p))
 }
@@ -262,7 +267,7 @@ func (ls *LockSpace) storeSegments(segments []string) []segmentRef {
 }
 
 func (ls *LockSpace) releaseSegment(segment string) {
-	ls.segmentRegistry.Release(segment)
+	ls.tokens.Release(segment)
 }
 
 func (ls *LockSpace) releaseSegments(segments []string) {
@@ -278,7 +283,10 @@ func cleanLockSurfaceGarbage(ls *LockSpace) {
 		ok := true
 		for ok {
 			select {
-			case segmentGroup := <-ls.surfaceGarbage:
+			case segmentGroup, closed := <-ls.garbage:
+				if closed {
+					break
+				}
 				segmentGroups = append(segmentGroups, segmentGroup)
 				ok = true
 			default:

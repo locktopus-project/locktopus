@@ -38,7 +38,7 @@ func TestLockSpace_SecondArgumentIsReceivedFromChan(t *testing.T) {
 	lr := NewResourceLock(internal.LockTypeRead, []string{"a", "b", "c"})
 
 	ul := NewUnlocker()
-	unlock := ls.LockGroup([]resourceLock{lr}, ul).Acquire()
+	unlock := ls.LockGroup([]ResourceLock{lr}, ul).Acquire()
 
 	if unlock != ul {
 		t.Error("Second argument should be received from chan")
@@ -50,7 +50,7 @@ func TestLockSpace_SingleGroupShouldBeLockedImmediately(t *testing.T) {
 
 	lr := NewResourceLock(internal.LockTypeRead, []string{"a", "b", "c"})
 
-	ls.LockGroup([]resourceLock{lr})
+	ls.LockGroup([]ResourceLock{lr})
 }
 
 func TestLockSpace_DuplicateRecordsShouldNotBringDeadlock(t *testing.T) {
@@ -59,18 +59,18 @@ func TestLockSpace_DuplicateRecordsShouldNotBringDeadlock(t *testing.T) {
 	lr1 := NewResourceLock(internal.LockTypeWrite, []string{"a", "b", "c"})
 	lr2 := NewResourceLock(internal.LockTypeWrite, []string{"a", "b", "c"})
 
-	ls.LockGroup([]resourceLock{lr1, lr2})
+	ls.LockGroup([]ResourceLock{lr1, lr2})
 }
 
 func TestLockSpace_ConcurrentGroupShouldBlock(t *testing.T) {
 	ls := NewLockSpace()
 
 	lr1 := NewResourceLock(internal.LockTypeWrite, []string{"a", "b", "c"})
-	ls.LockGroup([]resourceLock{lr1})
+	ls.LockGroup([]ResourceLock{lr1})
 
 	lr2 := NewResourceLock(internal.LockTypeWrite, []string{"a", "b", "c"})
 
-	w := ls.LockGroup([]resourceLock{lr2})
+	w := ls.LockGroup([]ResourceLock{lr2})
 	assertWaiterIsWaiting(t, w)
 }
 
@@ -78,10 +78,10 @@ func TestLockSpace_EmptyPathShouldAlsoCauseBlock(t *testing.T) {
 	ls := NewLockSpace()
 
 	lr1 := NewResourceLock(internal.LockTypeWrite, []string{})
-	ls.LockGroup([]resourceLock{lr1})
+	ls.LockGroup([]ResourceLock{lr1})
 
 	lr2 := NewResourceLock(internal.LockTypeWrite, []string{"a", "b", "c"})
-	w := ls.LockGroup([]resourceLock{lr2})
+	w := ls.LockGroup([]ResourceLock{lr2})
 	assertWaiterIsWaiting(t, w)
 }
 
@@ -91,8 +91,8 @@ func TestLockSpace_TestRelease(t *testing.T) {
 	path := []string{"a", "b", "c"}
 
 	lr1 := NewResourceLock(internal.LockTypeWrite, path)
-	w1 := ls.LockGroup([]resourceLock{lr1})
-	w2 := ls.LockGroup([]resourceLock{lr1})
+	w1 := ls.LockGroup([]ResourceLock{lr1})
+	w2 := ls.LockGroup([]ResourceLock{lr1})
 
 	assertWaiterWontWait(t, w1)
 	assertWaiterIsWaiting(t, w2)
@@ -110,11 +110,11 @@ func TestLockSpace_ParallelWritesShouldSucced(t *testing.T) {
 	ls := NewLockSpace()
 
 	lr1 := NewResourceLock(internal.LockTypeWrite, []string{"a", "b", "1"})
-	w := ls.LockGroup([]resourceLock{lr1})
+	w := ls.LockGroup([]ResourceLock{lr1})
 	assertWaiterWontWait(t, w)
 
 	lr2 := NewResourceLock(internal.LockTypeWrite, []string{"a", "b", "2"})
-	w = ls.LockGroup([]resourceLock{lr2})
+	w = ls.LockGroup([]ResourceLock{lr2})
 	assertWaiterWontWait(t, w)
 }
 
@@ -122,11 +122,11 @@ func TestLockSpace_ParallelReadsShouldSucced(t *testing.T) {
 	ls := NewLockSpace()
 
 	lr1 := NewResourceLock(internal.LockTypeRead, []string{"a", "b", "1"})
-	w := ls.LockGroup([]resourceLock{lr1})
+	w := ls.LockGroup([]ResourceLock{lr1})
 	assertWaiterWontWait(t, w)
 
 	lr2 := NewResourceLock(internal.LockTypeRead, []string{"a", "b", "2"})
-	w = ls.LockGroup([]resourceLock{lr2})
+	w = ls.LockGroup([]ResourceLock{lr2})
 	assertWaiterWontWait(t, w)
 }
 
@@ -134,10 +134,10 @@ func TestLockSpace_SequentialWritesShouldBlocked_Postfix(t *testing.T) {
 	ls := NewLockSpace()
 
 	lr1 := NewResourceLock(internal.LockTypeWrite, []string{"a", "b"})
-	ls.LockGroup([]resourceLock{lr1})
+	ls.LockGroup([]ResourceLock{lr1})
 
 	lr2 := NewResourceLock(internal.LockTypeWrite, []string{"a", "b", "2"})
-	w := ls.LockGroup([]resourceLock{lr2})
+	w := ls.LockGroup([]ResourceLock{lr2})
 
 	assertWaiterIsWaiting(t, w)
 }
@@ -146,10 +146,10 @@ func TestLockSpace_SequentialWritesShouldBlocked_Prefix(t *testing.T) {
 	ls := NewLockSpace()
 
 	lr1 := NewResourceLock(internal.LockTypeWrite, []string{"a", "b", "2"})
-	ls.LockGroup([]resourceLock{lr1})
+	ls.LockGroup([]ResourceLock{lr1})
 
 	lr2 := NewResourceLock(internal.LockTypeWrite, []string{"a", "b"})
-	w := ls.LockGroup([]resourceLock{lr2})
+	w := ls.LockGroup([]ResourceLock{lr2})
 
 	assertWaiterIsWaiting(t, w)
 }
@@ -158,34 +158,34 @@ func TestLockSpace_AdjacentReadsDoNotBlockEachOther(t *testing.T) {
 	ls := NewLockSpace()
 
 	lr1 := NewResourceLock(internal.LockTypeWrite, []string{"a"})
-	w1 := ls.LockGroup([]resourceLock{lr1})
+	w1 := ls.LockGroup([]ResourceLock{lr1})
 
 	lr2 := NewResourceLock(internal.LockTypeRead, []string{"a", "b"})
-	w2 := ls.LockGroup([]resourceLock{lr2})
+	w2 := ls.LockGroup([]ResourceLock{lr2})
 
 	lr3 := NewResourceLock(internal.LockTypeRead, []string{"a", "b", "1"})
-	w3 := ls.LockGroup([]resourceLock{lr3})
+	w3 := ls.LockGroup([]ResourceLock{lr3})
 
 	lr4 := NewResourceLock(internal.LockTypeRead, []string{"a", "b", "2"})
-	w4 := ls.LockGroup([]resourceLock{lr4})
+	w4 := ls.LockGroup([]ResourceLock{lr4})
 
 	lr5 := NewResourceLock(internal.LockTypeRead, []string{"a", "b", "1", "a"})
-	w5 := ls.LockGroup([]resourceLock{lr5})
+	w5 := ls.LockGroup([]ResourceLock{lr5})
 
 	lr6 := NewResourceLock(internal.LockTypeRead, []string{"a", "b", "1", "b"})
-	w6 := ls.LockGroup([]resourceLock{lr6})
+	w6 := ls.LockGroup([]ResourceLock{lr6})
 
 	lr7 := NewResourceLock(internal.LockTypeRead, []string{"a", "b", "2", "a"})
-	w7 := ls.LockGroup([]resourceLock{lr7})
+	w7 := ls.LockGroup([]ResourceLock{lr7})
 
 	lr8 := NewResourceLock(internal.LockTypeRead, []string{"a", "b", "2", "b"})
-	w8 := ls.LockGroup([]resourceLock{lr8})
+	w8 := ls.LockGroup([]ResourceLock{lr8})
 
 	lr9 := NewResourceLock(internal.LockTypeRead, []string{})
-	w9 := ls.LockGroup([]resourceLock{lr9})
+	w9 := ls.LockGroup([]ResourceLock{lr9})
 
 	lr10 := NewResourceLock(internal.LockTypeWrite, []string{"a", "b", "2", "b", "c"})
-	w10 := ls.LockGroup([]resourceLock{lr10})
+	w10 := ls.LockGroup([]ResourceLock{lr10})
 
 	assertWaiterWontWait(t, w1)
 
@@ -239,17 +239,17 @@ func TestLockSpace_PartialWriteOverlapping(t *testing.T) {
 	rl1 := NewResourceLock(internal.LockTypeWrite, []string{"a", "1"})
 	rl2 := NewResourceLock(internal.LockTypeWrite, []string{"a", "2"})
 	rl3 := NewResourceLock(internal.LockTypeWrite, []string{"a", "3"})
-	w1 := ls.LockGroup([]resourceLock{rl1, rl2, rl3})
+	w1 := ls.LockGroup([]ResourceLock{rl1, rl2, rl3})
 
 	rl4 := NewResourceLock(internal.LockTypeRead, []string{"a", "3"})
 	rl5 := NewResourceLock(internal.LockTypeRead, []string{"a", "4"})
 	rl6 := NewResourceLock(internal.LockTypeRead, []string{"a", "5"})
-	w2 := ls.LockGroup([]resourceLock{rl4, rl5, rl6})
+	w2 := ls.LockGroup([]ResourceLock{rl4, rl5, rl6})
 
 	rl7 := NewResourceLock(internal.LockTypeWrite, []string{"a", "5"})
 	rl8 := NewResourceLock(internal.LockTypeWrite, []string{"a", "6"})
 	rl9 := NewResourceLock(internal.LockTypeWrite, []string{"a", "7"})
-	w3 := ls.LockGroup([]resourceLock{rl7, rl8, rl9})
+	w3 := ls.LockGroup([]ResourceLock{rl7, rl8, rl9})
 
 	assertWaiterIsWaiting(t, w2)
 	assertWaiterIsWaiting(t, w3)
@@ -269,17 +269,17 @@ func TestLockSpace_PartialReadOverlapping(t *testing.T) {
 	rl1 := NewResourceLock(internal.LockTypeWrite, []string{"a", "1"})
 	rl2 := NewResourceLock(internal.LockTypeWrite, []string{"a", "2"})
 	rl3 := NewResourceLock(internal.LockTypeRead, []string{"a", "3"})
-	w1 := ls.LockGroup([]resourceLock{rl1, rl2, rl3})
+	w1 := ls.LockGroup([]ResourceLock{rl1, rl2, rl3})
 
 	rl4 := NewResourceLock(internal.LockTypeRead, []string{"a", "3"})
 	rl5 := NewResourceLock(internal.LockTypeWrite, []string{"a", "4"})
 	rl6 := NewResourceLock(internal.LockTypeRead, []string{"a", "5"})
-	w2 := ls.LockGroup([]resourceLock{rl4, rl5, rl6})
+	w2 := ls.LockGroup([]ResourceLock{rl4, rl5, rl6})
 
 	rl7 := NewResourceLock(internal.LockTypeRead, []string{"a", "5"})
 	rl8 := NewResourceLock(internal.LockTypeWrite, []string{"a", "6"})
 	rl9 := NewResourceLock(internal.LockTypeWrite, []string{"a", "7"})
-	w3 := ls.LockGroup([]resourceLock{rl7, rl8, rl9})
+	w3 := ls.LockGroup([]ResourceLock{rl7, rl8, rl9})
 
 	w3.Acquire()
 	w2.Acquire()
@@ -291,17 +291,17 @@ func TestLockSpace_Complex_1(t *testing.T) {
 	order := sliceAppender.NewSliceAppender[int]()
 
 	lr1 := NewResourceLock(internal.LockTypeRead, []string{"a"})
-	w1 := ls.LockGroup([]resourceLock{lr1})
+	w1 := ls.LockGroup([]ResourceLock{lr1})
 
 	lr2a := NewResourceLock(internal.LockTypeWrite, []string{"a", "1"})
 	lr2b := NewResourceLock(internal.LockTypeWrite, []string{"a", "2"})
-	w2 := ls.LockGroup([]resourceLock{lr2a, lr2b})
+	w2 := ls.LockGroup([]ResourceLock{lr2a, lr2b})
 
 	lr3a := NewResourceLock(internal.LockTypeRead, []string{})
-	w3a := ls.LockGroup([]resourceLock{lr3a})
+	w3a := ls.LockGroup([]ResourceLock{lr3a})
 
 	lr3b := NewResourceLock(internal.LockTypeRead, []string{"a", "3"})
-	w3b := ls.LockGroup([]resourceLock{lr3b})
+	w3b := ls.LockGroup([]ResourceLock{lr3b})
 
 	wg := sync.WaitGroup{}
 	wg.Add(4)
@@ -352,37 +352,37 @@ func TestLockSpace_Complex_2(t *testing.T) {
 
 	// 1
 	r1 := NewResourceLock(internal.LockTypeRead, []string{"a", "b", "c", "d"})
-	w1 := ls.LockGroup([]resourceLock{r1})
+	w1 := ls.LockGroup([]ResourceLock{r1})
 
 	// 2
 	r2 := NewResourceLock(internal.LockTypeWrite, []string{"a", "b"})
-	w2 := ls.LockGroup([]resourceLock{r2})
+	w2 := ls.LockGroup([]ResourceLock{r2})
 
 	// 3 ...
 	r3 := NewResourceLock(internal.LockTypeWrite, []string{"a", "b", "1", "a"})
-	w3 := ls.LockGroup([]resourceLock{r3})
+	w3 := ls.LockGroup([]ResourceLock{r3})
 
 	r4 := NewResourceLock(internal.LockTypeWrite, []string{"a", "b", "1", "b"})
-	w4 := ls.LockGroup([]resourceLock{r4})
+	w4 := ls.LockGroup([]ResourceLock{r4})
 
 	r5 := NewResourceLock(internal.LockTypeWrite, []string{"a", "b", "2", "a"})
-	w5 := ls.LockGroup([]resourceLock{r5})
+	w5 := ls.LockGroup([]ResourceLock{r5})
 
 	r6 := NewResourceLock(internal.LockTypeWrite, []string{"a", "b", "2", "b"})
-	w6 := ls.LockGroup([]resourceLock{r6})
+	w6 := ls.LockGroup([]ResourceLock{r6})
 
 	// 4 ...
 	r7 := NewResourceLock(internal.LockTypeRead, []string{})
-	w7 := ls.LockGroup([]resourceLock{r7})
+	w7 := ls.LockGroup([]ResourceLock{r7})
 
 	r8 := NewResourceLock(internal.LockTypeRead, []string{"a", "b", "3"})
-	w8 := ls.LockGroup([]resourceLock{r8})
+	w8 := ls.LockGroup([]ResourceLock{r8})
 
 	r9 := NewResourceLock(internal.LockTypeRead, []string{"a", "b", "3", "a"})
-	w9 := ls.LockGroup([]resourceLock{r9})
+	w9 := ls.LockGroup([]ResourceLock{r9})
 
 	r10 := NewResourceLock(internal.LockTypeRead, []string{"a", "b", "3", "a", "b"})
-	w10 := ls.LockGroup([]resourceLock{r10})
+	w10 := ls.LockGroup([]ResourceLock{r10})
 
 	go func() {
 		u := w10.Acquire()
