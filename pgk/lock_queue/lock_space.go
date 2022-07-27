@@ -2,6 +2,7 @@ package internal
 
 import (
 	"sync"
+	"time"
 	"unsafe"
 
 	dagLock "github.com/xshkut/distributed-lock/pgk/dag_lock"
@@ -9,18 +10,21 @@ import (
 	setCounter "github.com/xshkut/distributed-lock/pgk/set_counter"
 )
 
+const garbageBufferSize = 10000
+const surfaceCleaningBufferingMs = 1000
+
 type LockType = dagLock.LockType
 
 const LockTypeRead LockType = dagLock.LockTypeRead
 const LockTypeWrite LockType = dagLock.LockTypeWrite
 
-type resourceLock struct {
+type ResourceLock struct {
 	lockType LockType
 	path     []string
 }
 
-func NewResourceLock(lockType dagLock.LockType, path []string) resourceLock {
-	return resourceLock{
+func NewResourceLock(lockType dagLock.LockType, path []string) ResourceLock {
+	return ResourceLock{
 		lockType: lockType,
 		path:     path,
 	}
@@ -52,7 +56,7 @@ func NewLockSpace() *LockSpace {
 	ls := LockSpace{
 		segmentRegistry: setCounter.NewSetCounter(),
 		lockSurface:     make(map[string][]lockRef),
-		surfaceGarbage:  make(chan [][]segmentRef),
+		surfaceGarbage:  make(chan [][]segmentRef, garbageBufferSize),
 	}
 
 	ls.rootRef = ls.storeSegment("root")
@@ -102,7 +106,7 @@ func (u Unlocker) Unlock() {
 // The returned value can be used to receive the reference to the second argument (unlock) if provided.
 // If unlock is not provided, it is made internally. This is the preferred way to ensure you won't unlock the group before it acquires the lock.
 // It is safe to call LockGroup multiple times.
-func (ls *LockSpace) LockGroup(group []resourceLock, unlocker ...Unlocker) Lock {
+func (ls *LockSpace) LockGroup(group []ResourceLock, unlocker ...Unlocker) Lock {
 	vertexes := make([]*dagLock.Vertex, len(group))
 	var u Unlocker
 
@@ -195,7 +199,6 @@ func (ls *LockSpace) LockGroup(group []resourceLock, unlocker ...Unlocker) Lock 
 		<-u.ch
 
 		ls.mx.Lock()
-		defer ls.mx.Unlock()
 
 		for _, v := range vertexes {
 			v.Unlock()
@@ -205,7 +208,9 @@ func (ls *LockSpace) LockGroup(group []resourceLock, unlocker ...Unlocker) Lock 
 			ls.releaseSegments(l.path)
 		}
 
-		// TODO: implement cleaning map
+		ls.mx.Unlock()
+
+		ls.surfaceGarbage <- segmentGroup
 	}()
 
 	ls.mx.Unlock()
@@ -267,12 +272,32 @@ func (ls *LockSpace) releaseSegments(segments []string) {
 }
 
 func cleanLockSurfaceGarbage(ls *LockSpace) {
-	for segmentGroup := range ls.surfaceGarbage {
+	for {
+		segmentGroups := make([][][]segmentRef, 0, 1)
+
+		ok := true
+		for ok {
+			select {
+			case segmentGroup := <-ls.surfaceGarbage:
+				segmentGroups = append(segmentGroups, segmentGroup)
+				ok = true
+			default:
+				ok = false
+			}
+		}
+
+		if len(segmentGroups) == 0 {
+			time.Sleep(surfaceCleaningBufferingMs * time.Millisecond)
+			continue
+		}
+
 		paths := make(set.Set[string])
 
-		for _, segmentRefs := range segmentGroup {
-			for i := range segmentRefs {
-				paths.Add(concatSegmentRefs(segmentRefs[:i+1]))
+		for _, segmentGroup := range segmentGroups {
+			for _, segmentRefs := range segmentGroup {
+				for i := range segmentRefs {
+					paths.Add(concatSegmentRefs(segmentRefs[:i+1]))
+				}
 			}
 		}
 
@@ -307,5 +332,7 @@ func cleanLockSurfaceGarbage(ls *LockSpace) {
 		}
 
 		ls.mx.Unlock()
+
+		time.Sleep(surfaceCleaningBufferingMs * time.Millisecond)
 	}
 }
