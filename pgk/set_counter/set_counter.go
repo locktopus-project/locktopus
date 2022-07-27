@@ -7,28 +7,31 @@ import (
 // Set for storing keys. Thread-unsafe.
 // Unlike the classic Set, SetCounter counts the balance of Store/Release calls for each key and does not allow to release unexisting keys.
 type SetCounter struct {
-	m map[string]*int64
+	m     map[string]*int64
+	count int64
 }
 
 func NewSetCounter() SetCounter {
 	return SetCounter{
-		m: map[string]*int64{},
+		m:     map[string]*int64{},
+		count: 0,
 	}
 }
 
-func (tm *SetCounter) Get(key string) *int64 {
-	value := tm.m[key]
+func (sc *SetCounter) Get(key string) *int64 {
+	value := sc.m[key]
 
 	return value
 }
 
-func (tm *SetCounter) Store(key string) (value *int64) {
+func (sc *SetCounter) Store(key string) (value *int64) {
 	var exists bool
 
-	value, exists = tm.m[key]
+	value, exists = sc.m[key]
 	if !exists {
 		value = new(int64)
-		tm.m[key] = value
+		sc.m[key] = value
+		sc.count++
 	}
 
 	atomic.AddInt64(value, 1)
@@ -36,8 +39,8 @@ func (tm *SetCounter) Store(key string) (value *int64) {
 	return value
 }
 
-func (tm *SetCounter) Release(key string) *int64 {
-	value, ok := tm.m[key]
+func (sc *SetCounter) Release(key string) *int64 {
+	value, ok := sc.m[key]
 	if !ok {
 		panic("Attempt to release non-existing key. Please, review your code.")
 	}
@@ -45,8 +48,9 @@ func (tm *SetCounter) Release(key string) *int64 {
 	atomic.AddInt64(value, -1)
 
 	if atomic.LoadInt64(value) == 0 {
-		delete(tm.m, key)
+		delete(sc.m, key)
 
+		sc.count--
 		return nil
 	}
 
