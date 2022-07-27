@@ -10,7 +10,7 @@ import (
 
 const uintptrSize = unsafe.Sizeof(uintptr(0))
 
-func uintptrToBytes(v segmentRef) []byte {
+func uintptrToBytes(v tokenRef) []byte {
 	b := make([]byte, uintptrSize)
 
 	switch uintptrSize {
@@ -25,7 +25,7 @@ func uintptrToBytes(v segmentRef) []byte {
 	return b
 }
 
-func concatSegmentRefs(pointers []segmentRef) string {
+func concatSegmentRefs(pointers []tokenRef) string {
 	concatSlice := make([]byte, 0)
 
 	for _, p := range pointers {
