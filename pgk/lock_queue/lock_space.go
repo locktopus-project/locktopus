@@ -2,6 +2,7 @@ package lockqueue
 
 import (
 	"sync"
+	"sync/atomic"
 	"unsafe"
 
 	dagLock "github.com/xshkut/distributed-lock/pgk/dag_lock"
@@ -41,7 +42,7 @@ type lockRef struct {
 }
 
 // LockSpace allows you to acquire an atomic lock for a set of ResourceLocks.
-// Use CreateAndRun() to create a new LockSpace and run its garbage collector. Stop() will stop the garbage collector.
+// Use NewLockSpaceRun() to create a new LockSpace and Stop() to finish the goroutines it spawns.
 type LockSpace struct {
 	mx              sync.Mutex
 	segmentTokens   setCounter.SetCounter
@@ -50,12 +51,12 @@ type LockSpace struct {
 	rootRef         tokenRef
 	activeLockers   *sync.WaitGroup
 	cleanerFinished chan struct{}
-	closed          bool
+	closed          int32
 }
 
 type tokenRef uintptr
 
-func CreateAndRun() *LockSpace {
+func NewLockSpaceRun() *LockSpace {
 	ls := LockSpace{
 		segmentTokens:   setCounter.NewSetCounter(),
 		lockSurface:     make(map[string][]lockRef),
@@ -71,12 +72,11 @@ func CreateAndRun() *LockSpace {
 	return &ls
 }
 
+// Stop forbids locking new groups and returns when the cleaner finishes with the remaining garbage.
 func (ls *LockSpace) Stop() {
-	if ls.closed {
+	if atomic.AddInt32(&ls.closed, 1) > 1 {
 		panic("LockSpace is already closed")
 	}
-
-	ls.closed = true
 
 	ls.activeLockers.Wait()
 
@@ -106,7 +106,7 @@ func (ls *LockSpace) Stop() {
 func (ls *LockSpace) LockGroup(lockGroup []ResourceLock, unlocker ...Unlocker) Lock {
 	ls.activeLockers.Add(1)
 
-	if ls.closed {
+	if atomic.LoadInt32(&ls.closed) > 0 {
 		panic("LockSpace is closed")
 	}
 
