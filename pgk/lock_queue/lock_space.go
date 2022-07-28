@@ -52,7 +52,7 @@ type LockSpace struct {
 	activeLockers   *sync.WaitGroup
 	cleanerFinished chan struct{}
 	closed          int32
-	statistics      Statistics
+	statistics      lockSpaceStatistics
 }
 
 type tokenRef uintptr
@@ -86,14 +86,31 @@ func (ls *LockSpace) Stop() {
 	<-ls.cleanerFinished
 }
 
+func (ls *LockSpace) Statistics() Statistics {
+	ls.mx.Lock()
+	defer ls.mx.Unlock()
+
+	s := Statistics{}
+
+	return s
+}
+
 // Statistics represents current state of LockSpace.
 type Statistics struct {
 	GroupsPending int64 // number of groups waiting for acquiring locks for all their resources.
 	GroupsLocked  int64 // number of groups waiting acquired locks for all their resources.
-	TokenCount    int64 // number of tokens (parts of a path) being stored
+	TokenCount    int64 // number of unique tokens (parts of a path) being stored
 	VertexCount   int64 // number of vertices (parts of a path) being stored
 	PathCount     int64 // number of unique paths requested. There is a refStack with lockRefs for each path.
-	LockrefCount  int64 // number of references to vertexes being stored inside refStacks
+	LockrefCount  int64 // number of references to vertexes being stored in refStacks
+}
+
+type lockSpaceStatistics struct {
+	groupsPending int64 // number of groups waiting for acquiring locks for all their resources.
+	groupsLocked  int64 // number of groups waiting acquired locks for all their resources.
+	vertexCount   int64 // number of vertices (parts of a path) being stored
+	pathCount     int64 // number of unique paths requested. There is a refStack with lockRefs for each path.
+	lockrefCount  int64 // number of references to vertexes being stored in refStacks
 }
 
 // LockGroup is used to lock a group of resourceLock's.
@@ -108,7 +125,6 @@ func (ls *LockSpace) LockGroup(lockGroup []ResourceLock, unlocker ...Unlocker) G
 		panic("LockSpace is closed")
 	}
 
-	vertexes := make([]*dagLock.Vertex, len(lockGroup))
 	var u Unlocker
 
 	if len(unlocker) > 1 {
@@ -121,7 +137,7 @@ func (ls *LockSpace) LockGroup(lockGroup []ResourceLock, unlocker ...Unlocker) G
 
 	ls.mx.Lock()
 
-	ls.statistics.GroupsPending++
+	ls.statistics.groupsPending++
 
 	tokenRefGroup := make([][]tokenRef, len(lockGroup))
 
@@ -133,8 +149,6 @@ func (ls *LockSpace) LockGroup(lockGroup []ResourceLock, unlocker ...Unlocker) G
 
 	for i, tokenRefs := range tokenRefGroup {
 		vertex := dagLock.NewVertex(lockGroup[i].LockType)
-		vertexes[i] = vertex
-		groupVertexes.Add(vertex)
 
 		for i := range tokenRefs {
 			path := concatSegmentRefs(tokenRefs[:i+1])
@@ -147,6 +161,7 @@ func (ls *LockSpace) LockGroup(lockGroup []ResourceLock, unlocker ...Unlocker) G
 			refStack, ok := ls.lockSurface[path]
 
 			if !ok {
+				groupVertexes.Add(vertex)
 				ls.lockSurface[path] = []lockRef{{t: refType, r: vertex}}
 				continue
 			}
@@ -180,6 +195,7 @@ func (ls *LockSpace) LockGroup(lockGroup []ResourceLock, unlocker ...Unlocker) G
 				}
 
 				// Substitute all refs with the new head
+				groupVertexes.Add(vertex)
 				ls.lockSurface[path] = []lockRef{{t: refType, r: vertex}}
 
 				continue
@@ -207,12 +223,15 @@ func (ls *LockSpace) LockGroup(lockGroup []ResourceLock, unlocker ...Unlocker) G
 				}
 			}
 
-			// Otherwise, just left a tail in the stack.
+			// Leave a tail in the stack.
+			groupVertexes.Add(vertex)
 			ls.lockSurface[path] = append(refStack, lockRef{t: refType, r: vertex})
 		}
 	}
 
 	ls.mx.Unlock()
+
+	vertexes := groupVertexes.GetAll()
 
 	go func() {
 		ch := <-u.ch
@@ -233,7 +252,7 @@ func (ls *LockSpace) LockGroup(lockGroup []ResourceLock, unlocker ...Unlocker) G
 
 		ls.garbage <- tokenRefGroup
 
-		ls.statistics.GroupsLocked--
+		ls.statistics.groupsLocked--
 
 		ls.activeLockers.Done()
 	}()
@@ -259,8 +278,8 @@ func (ls *LockSpace) LockGroup(lockGroup []ResourceLock, unlocker ...Unlocker) G
 
 				lockWaiter.makeReady(u)
 
-				ls.statistics.GroupsPending--
-				ls.statistics.GroupsLocked++
+				ls.statistics.groupsPending--
+				ls.statistics.groupsLocked++
 			}()
 
 			return lockWaiter
@@ -269,8 +288,8 @@ func (ls *LockSpace) LockGroup(lockGroup []ResourceLock, unlocker ...Unlocker) G
 
 	lockWaiter.makeReady(u)
 
-	ls.statistics.GroupsPending--
-	ls.statistics.GroupsLocked++
+	ls.statistics.groupsPending--
+	ls.statistics.groupsLocked++
 
 	return lockWaiter
 }
