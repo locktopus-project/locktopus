@@ -52,6 +52,7 @@ type LockSpace struct {
 	activeLockers   *sync.WaitGroup
 	cleanerFinished chan struct{}
 	closed          int32
+	statistics      Statistics
 }
 
 type tokenRef uintptr
@@ -86,17 +87,14 @@ func (ls *LockSpace) Stop() {
 }
 
 // Statistics represents current state of LockSpace.
-// GroupsPending - number of groups waiting for acquiring locks for all their resources.
-// GroupsLocked - number of groups waiting acquired locks for all their resources.
-// TokenCount - number of tokens (parts of a path) being stored
-// vertexCount - number
-// type Statistics struct {
-// 	groupsPending int64
-// 	groupsLocked  int64
-// 	tokenCount    int64
-// 	vertexCount   int64
-// 	pathCount     int64
-// }
+type Statistics struct {
+	GroupsPending int64 // number of groups waiting for acquiring locks for all their resources.
+	GroupsLocked  int64 // number of groups waiting acquired locks for all their resources.
+	TokenCount    int64 // number of tokens (parts of a path) being stored
+	VertexCount   int64 // number of vertices (parts of a path) being stored
+	PathCount     int64 // number of unique paths requested. There is a refStack with lockRefs for each path.
+	LockrefCount  int64 // number of references to vertexes being stored inside refStacks
+}
 
 // LockGroup is used to lock a group of resourceLock's.
 // You may pass you own unlocker as the second argument (unlock) and use it to unlock the group.
@@ -122,6 +120,8 @@ func (ls *LockSpace) LockGroup(lockGroup []ResourceLock, unlocker ...Unlocker) L
 	}
 
 	ls.mx.Lock()
+
+	ls.statistics.GroupsPending++
 
 	tokenRefGroup := make([][]tokenRef, len(lockGroup))
 
@@ -217,6 +217,8 @@ func (ls *LockSpace) LockGroup(lockGroup []ResourceLock, unlocker ...Unlocker) L
 
 		ls.garbage <- tokenRefGroup
 
+		ls.statistics.GroupsLocked--
+
 		ls.activeLockers.Done()
 	}()
 
@@ -240,6 +242,9 @@ func (ls *LockSpace) LockGroup(lockGroup []ResourceLock, unlocker ...Unlocker) L
 				}
 
 				lockWaiter.makeReady(u)
+
+				ls.statistics.GroupsPending--
+				ls.statistics.GroupsLocked++
 			}()
 
 			return lockWaiter
@@ -247,6 +252,9 @@ func (ls *LockSpace) LockGroup(lockGroup []ResourceLock, unlocker ...Unlocker) L
 	}
 
 	lockWaiter.makeReady(u)
+
+	ls.statistics.GroupsPending--
+	ls.statistics.GroupsLocked++
 
 	return lockWaiter
 }
