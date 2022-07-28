@@ -24,3 +24,13 @@ func (s Set[comparable]) Clear() {
 		delete(s, v)
 	}
 }
+
+func (s Set[comparable]) GetAll() []comparable {
+	var keys []comparable
+
+	for k := range s {
+		keys = append(keys, k)
+	}
+
+	return keys
+}

@@ -1,8 +1,7 @@
-package internal
+package lockqueue
 
 import (
 	"sync"
-	"time"
 	"unsafe"
 
 	dagLock "github.com/xshkut/distributed-lock/pgk/dag_lock"
@@ -15,8 +14,7 @@ type LockType = dagLock.LockType
 const LockTypeRead LockType = dagLock.LockTypeRead
 const LockTypeWrite LockType = dagLock.LockTypeWrite
 
-const garbageBufferSize = 10000
-const surfaceCleaningBufferingMs = 1000
+const garbageBufferSize = 100
 
 type ResourceLock struct {
 	LockType LockType
@@ -45,40 +43,53 @@ type lockRef struct {
 // LockSpace allows you to acquire an atomic lock for a set of ResourceLocks.
 // Use CreateAndRun() to create a new LockSpace and run its garbage collector. Stop() will stop the garbage collector.
 type LockSpace struct {
-	mx            sync.Mutex
-	segmentTokens setCounter.SetCounter
-	lockSurface   map[string][]lockRef
-	garbage       chan [][]tokenRef
-	rootRef       tokenRef
-	stop          *sync.WaitGroup
-	stopped       bool
+	mx              sync.Mutex
+	segmentTokens   setCounter.SetCounter
+	lockSurface     map[string][]lockRef
+	garbage         chan [][]tokenRef
+	rootRef         tokenRef
+	activeLockers   *sync.WaitGroup
+	cleanerFinished chan struct{}
+	closed          bool
 }
 
 type tokenRef uintptr
 
 func CreateAndRun() *LockSpace {
 	ls := LockSpace{
-		segmentTokens: setCounter.NewSetCounter(),
-		lockSurface:   make(map[string][]lockRef),
-		garbage:       make(chan [][]tokenRef, garbageBufferSize),
-		stop:          &sync.WaitGroup{},
+		segmentTokens:   setCounter.NewSetCounter(),
+		lockSurface:     make(map[string][]lockRef),
+		garbage:         make(chan [][]tokenRef, garbageBufferSize),
+		activeLockers:   &sync.WaitGroup{},
+		cleanerFinished: make(chan struct{}),
 	}
 
 	ls.rootRef = ls.storeTokens([]string{""})[0]
 
-	go cleanRefStacks(&ls)
+	go ls.cleanRefStacks()
 
 	return &ls
 }
 
 func (ls *LockSpace) Stop() {
-	ls.stopped = true
+	if ls.closed {
+		panic("LockSpace is already closed")
+	}
+
+	ls.closed = true
+
+	ls.activeLockers.Wait()
 
 	close(ls.garbage)
 
-	ls.stop.Wait()
+	<-ls.cleanerFinished
 }
 
+// Statistics represents current state of LockSpace.
+// GroupsPending - number of groups waiting for acquiring locks for all their resources.
+// GroupsLocked - number of groups waiting acquired locks for all their resources.
+// TokenCount - number of tokens (parts of a path) being stored
+// vertexCount - number
 // type Statistics struct {
 // 	groupsPending int64
 // 	groupsLocked  int64
@@ -87,49 +98,16 @@ func (ls *LockSpace) Stop() {
 // 	pathCount     int64
 // }
 
-type Lock struct {
-	ch chan Unlocker
-	u  Unlocker
-}
-
-// Acquire returns when the lock is acquired.
-// You may think of it as the casual method Lock from sync.Mutex.
-// The reason why the name differs is that the lock actually starts its lifecycle within LockGroup call.
-// Use the returned value to unlock the group.
-func (l Lock) Acquire() Unlocker {
-	<-l.ch
-
-	return l.u
-}
-
-func (l Lock) makeReady(u Unlocker) {
-	l.u = u
-	l.ch <- l.u
-	close(l.ch)
-}
-
-type Unlocker struct {
-	ch chan struct{}
-}
-
-func NewUnlocker() Unlocker {
-	return Unlocker{
-		ch: make(chan struct{}),
-	}
-}
-
-func (u Unlocker) Unlock() {
-	close(u.ch)
-}
-
 // LockGroup is used to lock a group of resourceLock's.
 // You may pass you own unlocker as the second argument (unlock) and use it to unlock the group.
 // The returned value can be used to receive the reference to the second argument (unlock) if provided.
 // If unlock is not provided, it is made internally. This is the preferred way to ensure you won't unlock the group before it acquires the lock.
 // It is safe to call LockGroup multiple times.
 func (ls *LockSpace) LockGroup(lockGroup []ResourceLock, unlocker ...Unlocker) Lock {
-	if ls.stopped {
-		panic("LockSpace is stopped")
+	ls.activeLockers.Add(1)
+
+	if ls.closed {
+		panic("LockSpace is closed")
 	}
 
 	vertexes := make([]*dagLock.Vertex, len(lockGroup))
@@ -238,6 +216,8 @@ func (ls *LockSpace) LockGroup(lockGroup []ResourceLock, unlocker ...Unlocker) L
 		ls.mx.Unlock()
 
 		ls.garbage <- tokenRefGroup
+
+		ls.activeLockers.Done()
 	}()
 
 	lockWaiter := Lock{
@@ -289,30 +269,28 @@ func (ls *LockSpace) releaseTokens(segments []string) {
 	}
 }
 
-func cleanRefStacks(ls *LockSpace) {
-	exit := false
+func (ls *LockSpace) cleanRefStacks() {
+	var opened bool
 
-	for {
+	for opened {
 		segmentGroupList := make([][][]tokenRef, 0, 1)
+		var segmentGroup [][]tokenRef
 
-		ok := true
-		for ok {
-			select {
-			case segmentGroup, closed := <-ls.garbage:
-				if closed {
-					exit = true
-					break
-				}
-				segmentGroupList = append(segmentGroupList, segmentGroup)
-				ok = true
-			default:
-				ok = false
-			}
+		segmentGroup, opened = <-ls.garbage
+		if !opened {
+			break
 		}
 
-		if len(segmentGroupList) == 0 {
-			time.Sleep(surfaceCleaningBufferingMs * time.Millisecond)
-			continue
+		segmentGroupList = append(segmentGroupList, segmentGroup)
+
+		for !opened {
+			select {
+			case segmentGroup, opened = <-ls.garbage:
+				if opened {
+					segmentGroupList = append(segmentGroupList, segmentGroup)
+				}
+			default:
+			}
 		}
 
 		paths := make(set.Set[string])
@@ -356,11 +334,7 @@ func cleanRefStacks(ls *LockSpace) {
 		}
 
 		ls.mx.Unlock()
-
-		if exit {
-			break
-		}
-
-		time.Sleep(surfaceCleaningBufferingMs * time.Millisecond)
 	}
+
+	ls.cleanerFinished <- struct{}{}
 }

@@ -1,4 +1,4 @@
-package internal
+package lockqueue
 
 import (
 	"fmt"
@@ -475,6 +475,8 @@ func TestLockSpace_Complex_2(t *testing.T) {
 
 func TestStop_StopAfterStop(t *testing.T) {
 	ls := CreateAndRun()
+
+	_ = ls
 
 	ls.Stop()
 

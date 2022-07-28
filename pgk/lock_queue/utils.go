@@ -1,4 +1,4 @@
-package internal
+package lockqueue
 
 import (
 	"encoding/binary"
