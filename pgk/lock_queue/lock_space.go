@@ -32,8 +32,8 @@ func NewResourceLock(lockType LockType, path []string) ResourceLock {
 type refType int8
 
 const (
-	tail refType = iota
-	head refType = iota
+	tail refType = iota // tail is a non-last segment in the path
+	head refType = iota // head is the last segment of the path
 )
 
 type lockRef struct {
@@ -101,7 +101,7 @@ type Statistics struct {
 // The returned value can be used to receive the reference to the second argument (unlock) if provided.
 // If unlock is not provided, it is made internally. This is the preferred way to ensure you won't unlock the group before it acquires the lock.
 // It is safe to call LockGroup multiple times.
-func (ls *LockSpace) LockGroup(lockGroup []ResourceLock, unlocker ...Unlocker) Lock {
+func (ls *LockSpace) LockGroup(lockGroup []ResourceLock, unlocker ...Unlocker) GroupLocker {
 	ls.activeLockers.Add(1)
 
 	if atomic.LoadInt32(&ls.closed) > 0 {
@@ -151,30 +151,41 @@ func (ls *LockSpace) LockGroup(lockGroup []ResourceLock, unlocker ...Unlocker) L
 				continue
 			}
 
+			// Do nothing if the group aready has a head in the stack.
+			lastRef := refStack[len(refStack)-1]
+			if lastRef.t == head && groupVertexes.Has(lastRef.r) {
+				break
+			}
+
 			if refType == head {
 				vertexBound := false
-				groupLocked := false
 				for i := len(refStack) - 1; i >= 0; i-- {
+					// Do not bind to siblings' tails.
 					if groupVertexes.Has(refStack[i].r) {
-						groupLocked = true
 						continue
 					}
 
-					if refStack[i].t == head && vertexBound {
+					if refStack[i].t == head {
+						if vertexBound {
+							break
+						}
+
+						vertexBound = true
+						refStack[i].r.AddChild(vertex)
 						break
 					}
 
-					refStack[i].r.AddChild(vertex)
 					vertexBound = true
+					refStack[i].r.AddChild(vertex)
 				}
 
-				if !groupLocked {
-					ls.lockSurface[path] = []lockRef{{t: refType, r: vertex}}
-				}
+				// Substitute all refs with the new head
+				ls.lockSurface[path] = []lockRef{{t: refType, r: vertex}}
 
 				continue
 			}
 
+			// Check if the group has left a tail in the stack.
 			groupLocked := false
 			for _, ref := range refStack {
 				if groupVertexes.Has(ref.r) {
@@ -183,10 +194,12 @@ func (ls *LockSpace) LockGroup(lockGroup []ResourceLock, unlocker ...Unlocker) L
 				}
 			}
 
+			// If the group has left a tail in the stack, do nothing.
 			if groupLocked {
 				continue
 			}
 
+			// If there is a head in the stack, bind to it.
 			for i := len(refStack) - 1; i >= 0; i-- {
 				if refStack[i].t == head {
 					refStack[i].r.AddChild(vertex)
@@ -194,6 +207,7 @@ func (ls *LockSpace) LockGroup(lockGroup []ResourceLock, unlocker ...Unlocker) L
 				}
 			}
 
+			// Otherwise, just left a tail in the stack.
 			ls.lockSurface[path] = append(refStack, lockRef{t: refType, r: vertex})
 		}
 	}
@@ -201,13 +215,15 @@ func (ls *LockSpace) LockGroup(lockGroup []ResourceLock, unlocker ...Unlocker) L
 	ls.mx.Unlock()
 
 	go func() {
-		<-u.ch
+		ch := <-u.ch
 
 		ls.mx.Lock()
 
 		for _, v := range vertexes {
 			v.Unlock()
 		}
+
+		close(ch)
 
 		for _, l := range lockGroup {
 			ls.releaseTokens(l.Path)
@@ -222,7 +238,7 @@ func (ls *LockSpace) LockGroup(lockGroup []ResourceLock, unlocker ...Unlocker) L
 		ls.activeLockers.Done()
 	}()
 
-	lockWaiter := Lock{
+	lockWaiter := GroupLocker{
 		u:  u,
 		ch: make(chan Unlocker, 1),
 	}

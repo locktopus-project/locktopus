@@ -10,7 +10,7 @@ import (
 	sliceAppender "github.com/xshkut/distributed-lock/pgk/slice_appender"
 )
 
-func assertWaiterIsWaiting(t *testing.T, lw Lock) {
+func assertWaiterIsWaiting(t *testing.T, lw GroupLocker) {
 	select {
 	case <-lw.ch:
 		t.Error("Waiter should still wait")
@@ -18,7 +18,7 @@ func assertWaiterIsWaiting(t *testing.T, lw Lock) {
 	}
 }
 
-func assertWaiterWontWait(t *testing.T, lw Lock) {
+func assertWaiterWontWait(t *testing.T, lw GroupLocker) {
 	select {
 	case <-lw.ch:
 	default:
@@ -284,6 +284,24 @@ func TestLockSpace_PartialReadOverlapping(t *testing.T) {
 	w3.Acquire()
 	w2.Acquire()
 	w1.Acquire()
+}
+
+func TestLockSpace_HeadAfterTail(t *testing.T) {
+	ls := NewLockSpaceRun()
+
+	rl1 := NewResourceLock(internal.LockTypeWrite, []string{"a", "1"})
+	w1 := ls.LockGroup([]ResourceLock{rl1})
+
+	rl21 := NewResourceLock(internal.LockTypeRead, []string{"a", "1", "2"})
+	rl22 := NewResourceLock(internal.LockTypeWrite, []string{"a", "1"})
+	ls.LockGroup([]ResourceLock{rl21, rl22})
+
+	rl3 := NewResourceLock(internal.LockTypeRead, []string{"a", "1"})
+	w3 := ls.LockGroup([]ResourceLock{rl3})
+
+	w1.Acquire().Unlock()
+
+	assertWaiterIsWaiting(t, w3)
 }
 
 func TestLockSpace_Complex_1(t *testing.T) {
