@@ -166,10 +166,12 @@ func (ls *LockSpace) LockGroup(lockGroup []ResourceLock, unlocker ...Unlocker) G
 				continue
 			}
 
-			// Do nothing if the group aready has a head in the stack.
+			// Do nothing if the group aready has a head in the stack so the lock is useless. A head might be only on top of the stack
 			lastRef := refStack[len(refStack)-1]
-			if lastRef.t == head && groupVertexes.Has(lastRef.r) {
-				break
+			if lastRef.t == head && groupVertexes.Has(lastRef.v) {
+				if lockType == LockTypeRead || lastRef.v.LockType() == LockTypeWrite {
+					break
+				}
 			}
 
 			if refType == head {
