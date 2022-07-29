@@ -304,6 +304,27 @@ func TestLockSpace_HeadAfterTail(t *testing.T) {
 	assertWaiterIsWaiting(t, w3)
 }
 
+func TestLockSpace_TailAfterHead(t *testing.T) {
+	ls := NewLockSpaceRun()
+
+	rl01 := NewResourceLock(internal.LockTypeRead, []string{"a"})
+	rl02 := NewResourceLock(internal.LockTypeWrite, []string{"a", "b"})
+	ls.LockGroup([]ResourceLock{rl01, rl02})
+
+	rl1 := NewResourceLock(internal.LockTypeRead, []string{"a", "c"})
+	w1 := ls.LockGroup([]ResourceLock{rl1})
+	assertWaiterWontWait(t, w1)
+
+	rl2 := NewResourceLock(internal.LockTypeRead, []string{"a"})
+	w2 := ls.LockGroup([]ResourceLock{rl2})
+	assertWaiterWontWait(t, w2)
+
+	rl3 := NewResourceLock(internal.LockTypeRead, []string{"a", "b"})
+	w3 := ls.LockGroup([]ResourceLock{rl3})
+	assertWaiterIsWaiting(t, w3)
+
+}
+
 func TestLockSpace_Complex_1(t *testing.T) {
 	ls := NewLockSpaceRun()
 	order := sliceAppender.NewSliceAppender[int]()
@@ -519,4 +540,254 @@ func TestStop_LockGroupAfterStop(t *testing.T) {
 	}()
 
 	ls.LockGroup([]ResourceLock{NewResourceLock(LockTypeRead, []string{"a"})})
+}
+
+func TestLockSpace_GroupID(t *testing.T) {
+	ls := NewLockSpaceRun()
+
+	w1 := ls.LockGroup([]ResourceLock{NewResourceLock(LockTypeRead, []string{"a"})})
+	w2 := ls.LockGroup([]ResourceLock{NewResourceLock(LockTypeRead, []string{"a"})})
+
+	if w1.ID() != 1 {
+		t.Error("Expected ID = 1")
+	}
+
+	if w2.ID() != 2 {
+		t.Error("Expected ID = 2")
+	}
+}
+
+func TestStatistics_LastGroupID(t *testing.T) {
+	ls := NewLockSpaceRun()
+
+	lr := NewResourceLock(LockTypeWrite, []string{"a", "b", "c"})
+	locker := ls.LockGroup([]ResourceLock{lr})
+
+	if ls.Statistics().LastGroupID != locker.ID() {
+		t.Error("Expected LastGroupID = locker.ID()")
+	}
+}
+
+func TestStatistics_Tokens(t *testing.T) {
+	ls := NewLockSpaceRun()
+
+	s0 := ls.Statistics()
+
+	lr0 := NewResourceLock(LockTypeWrite, []string{"a", "b", "a"})
+	lr1 := NewResourceLock(LockTypeWrite, []string{"a", "b", "c"})
+	locker := ls.LockGroup([]ResourceLock{lr0, lr1})
+	u := locker.Acquire()
+
+	s1 := ls.Statistics()
+
+	if s1.TokensTotal != s0.TokensTotal+6 {
+		t.Errorf("Wrong TokensTotal after lock")
+	}
+
+	if s1.TokensUnique != s0.TokensUnique+3 {
+		t.Errorf("Expected TokensUnique after lock")
+	}
+
+	u.Unlock()
+
+	s2 := ls.Statistics()
+
+	if s2.TokensTotal != s0.TokensTotal {
+		t.Errorf("Expected TokensTotal after unlock")
+	}
+
+	if s2.TokensUnique != s0.TokensUnique {
+		t.Errorf("Expected TokensUnique after unlock")
+	}
+}
+
+func TestStatistics_Groups(t *testing.T) {
+	ls := NewLockSpaceRun()
+
+	s0 := ls.Statistics()
+
+	if s0.GroupsPending != 0 {
+		t.Errorf("Expected GroupsPending = 0, got %d", s0.GroupsPending)
+	}
+
+	if s0.GroupsAcquired != 0 {
+		t.Errorf("Expected GroupsAcquired = 0, got %d", s0.GroupsAcquired)
+	}
+
+	lr0 := NewResourceLock(LockTypeWrite, []string{"a"})
+	locker0 := ls.LockGroup([]ResourceLock{lr0})
+
+	s1 := ls.Statistics()
+
+	if s1.GroupsPending != 0 {
+		t.Errorf("Expected GroupsPending = 0, got %d", s1.GroupsPending)
+	}
+
+	if s1.GroupsAcquired != 1 {
+		t.Errorf("Expected GroupsAcquired = 1,got %d", s1.GroupsAcquired)
+	}
+
+	lr1 := NewResourceLock(LockTypeRead, []string{"a"})
+	locker1 := ls.LockGroup([]ResourceLock{lr1})
+
+	s2 := ls.Statistics()
+
+	if s2.GroupsPending != 1 {
+		t.Errorf("Expected GroupsPending = 1, got %d", s2.GroupsPending)
+	}
+
+	if s2.GroupsAcquired != 1 {
+		t.Errorf("Expected GroupsAcquired = 1, got %d", s2.GroupsAcquired)
+	}
+
+	locker0.Acquire().Unlock()
+	locker1.Acquire()
+
+	s3 := ls.Statistics()
+
+	if s3.GroupsPending != 0 {
+		t.Errorf("Expected GroupsPending = 0, got %d", s3.GroupsPending)
+	}
+
+	if s3.GroupsAcquired != 1 {
+		t.Errorf("Expected GroupsAcquired = 1, got %d", s3.GroupsAcquired)
+	}
+
+	lr2 := NewResourceLock(LockTypeRead, []string{"a"})
+	locker2 := ls.LockGroup([]ResourceLock{lr2})
+
+	locker2.Acquire()
+
+	s4 := ls.Statistics()
+
+	if s4.GroupsPending != 0 {
+		t.Errorf("Expected GroupsPending = 0, got %d", s4.GroupsPending)
+	}
+
+	if s4.GroupsAcquired != 2 {
+		t.Errorf("Expected GroupsAcquired = 2, got %d", s4.GroupsAcquired)
+	}
+}
+
+func TestStatistics_Locks(t *testing.T) {
+	ls := NewLockSpaceRun()
+
+	s0 := ls.Statistics()
+
+	if s0.LocksAcquired != 0 {
+		t.Errorf("Expected LocksAcquired = 0, got %d", s0.GroupsPending)
+	}
+
+	if s0.LocksPending != 0 {
+		t.Errorf("Expected LocksPending = 0, got %d", s0.GroupsAcquired)
+	}
+
+	lr0 := NewResourceLock(LockTypeWrite, []string{"a", "b"})
+	locker0 := ls.LockGroup([]ResourceLock{lr0})
+
+	s1 := ls.Statistics()
+
+	if s1.LocksAcquired != 1 {
+		t.Errorf("Expected LocksAcquired = 1, got %d", s1.GroupsPending)
+	}
+
+	if s1.LocksPending != 0 {
+		t.Errorf("Expected LocksPending = 0, got %d", s1.GroupsAcquired)
+	}
+
+	lr1 := NewResourceLock(LockTypeRead, []string{"a", "b"})
+	locker1 := ls.LockGroup([]ResourceLock{lr1})
+
+	s2 := ls.Statistics()
+
+	if s2.LocksAcquired != 1 {
+		t.Errorf("Expected LocksAcquired = 1, got %d", s2.GroupsPending)
+	}
+
+	if s2.LocksPending != 1 {
+		t.Errorf("Expected LocksPending = 1, got %d", s2.GroupsAcquired)
+	}
+
+	locker0.Acquire().Unlock()
+	locker1.Acquire()
+
+	s3 := ls.Statistics()
+
+	if s3.LocksAcquired != 1 {
+		t.Errorf("Expected LocksAcquired = 1, got %d", s3.GroupsPending)
+	}
+
+	if s3.LocksPending != 0 {
+		t.Errorf("Expected LocksPending = 0, got %d", s3.GroupsAcquired)
+	}
+
+	locker1.Acquire().Unlock()
+
+	s4 := ls.Statistics()
+
+	if s4.LocksAcquired != 0 {
+		t.Errorf("Expected LocksAcquired = 0, got %d", s4.GroupsPending)
+	}
+
+	if s4.LocksPending != 0 {
+		t.Errorf("Expected LocksPending = 0, got %d", s4.GroupsAcquired)
+	}
+}
+
+func TestStatistics_LockShadowing_Write(t *testing.T) {
+	ls := NewLockSpaceRun()
+
+	lr0 := NewResourceLock(LockTypeWrite, []string{"a"})
+	// Shadowed by lr0
+	lr1 := NewResourceLock(LockTypeWrite, []string{"a", "b"})
+	// Shadowed by lr0
+	lr2 := NewResourceLock(LockTypeWrite, []string{"a", "b", "c"})
+	ls.LockGroup([]ResourceLock{lr0, lr1, lr2})
+
+	s := ls.Statistics()
+	if s.LocksAcquired != 1 {
+		t.Errorf("Expected locks: 1, got %d", s.LocksAcquired)
+	}
+}
+
+func TestStatistics_LockShadowing_WriteAfterRead(t *testing.T) {
+	ls := NewLockSpaceRun()
+
+	lr0 := NewResourceLock(LockTypeRead, []string{"a"})
+	// Not shadowed by lr0
+	lr1 := NewResourceLock(LockTypeWrite, []string{"a", "b"})
+	ls.LockGroup([]ResourceLock{lr0, lr1})
+
+	s := ls.Statistics()
+	if s.LocksAcquired != 2 {
+		t.Errorf("Expected 2 locks, got %d", s.LocksAcquired)
+	}
+}
+
+func TestStatistics_LockrefCount(t *testing.T) {
+	ls := NewLockSpaceRun()
+
+	s0 := ls.Statistics()
+
+	if s0.LockrefCount != 0 {
+		t.Errorf("Expected LockrefCount = 0, got %d", s0.LockrefCount)
+	}
+
+	lr0 := NewResourceLock(LockTypeRead, []string{"a"})
+	lr1 := NewResourceLock(LockTypeWrite, []string{"a", "b"})
+	l := ls.LockGroup([]ResourceLock{lr0, lr1})
+
+	s1 := ls.Statistics()
+	if s1.LockrefCount == 0 {
+		t.Errorf("There should be lock refs")
+	}
+
+	l.Acquire().Unlock()
+
+	ls.Stop()
+
+	s2 := ls.Statistics()
+	if s2.LockrefCount != 0 {
+		t.Errorf("Expected LockrefCount = 0, got %d", s2.LockrefCount)
+	}
 }

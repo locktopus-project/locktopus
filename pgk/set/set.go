@@ -10,6 +10,16 @@ func (s Set[comparable]) Add(v comparable) {
 	s[v] = struct{}{}
 }
 
+func (s Set[comparable]) AddOnce(v comparable, condition *bool) {
+	if *condition {
+		return
+	}
+
+	s[v] = struct{}{}
+
+	*condition = true
+}
+
 func (s Set[comparable]) Remove(v comparable) {
 	delete(s, v)
 }

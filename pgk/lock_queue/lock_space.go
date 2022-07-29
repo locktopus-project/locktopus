@@ -1,6 +1,7 @@
 package lockqueue
 
 import (
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"unsafe"
@@ -38,7 +39,7 @@ const (
 
 type lockRef struct {
 	t refType
-	r *dagLock.Vertex
+	v *dagLock.Vertex
 }
 
 // LockSpace allows you to acquire an atomic lock for a set of ResourceLocks.
@@ -53,9 +54,31 @@ type LockSpace struct {
 	cleanerFinished chan struct{}
 	closed          int32
 	statistics      lockSpaceStatistics
+	lastGroupID     int64
 }
 
 type tokenRef uintptr
+
+// Statistics represents current state of LockSpace. All values (except LastGroupID) are non-accumulative
+type Statistics struct {
+	LastGroupID    int64 // Sequence number of the last group (starting from 1)
+	GroupsPending  int64 // number of groups waiting for acquiring locks for all their resources
+	GroupsAcquired int64 // number of groups waiting acquired locks for all their resources
+	LocksPending   int64 // number of resource locks being stored
+	LocksAcquired  int64 // number of resource locks being stored
+	LockrefCount   int64 // number of references to vertexes being stored in refStacks
+	TokensTotal    int64 // number of unique tokens (parts of a path) being stored
+	TokensUnique   int64 // number of unique tokens (parts of a path) being stored
+	PathCount      int64 // number of unique paths requested. There is a refStack with lockRefs for each path. Initially, LockSpace has PathCount = 1 (for the root segment)
+}
+
+type lockSpaceStatistics struct {
+	groupsPending       int64
+	groupsAcquired      int64
+	pendingVertexCount  int64
+	acquiredVertexCount int64
+	lockrefCount        int64
+}
 
 func NewLockSpaceRun() *LockSpace {
 	ls := LockSpace{
@@ -92,25 +115,21 @@ func (ls *LockSpace) Statistics() Statistics {
 
 	s := Statistics{}
 
+	s.LastGroupID = ls.lastGroupID
+
+	s.GroupsPending = atomic.LoadInt64(&ls.statistics.groupsPending)
+	s.GroupsAcquired = atomic.LoadInt64(&ls.statistics.groupsAcquired)
+
+	s.LocksPending = atomic.LoadInt64(&ls.statistics.pendingVertexCount)
+	s.LocksAcquired = atomic.LoadInt64(&ls.statistics.acquiredVertexCount)
+
+	s.LockrefCount = atomic.LoadInt64(&ls.statistics.lockrefCount)
+
+	s.PathCount = int64(len(ls.lockSurface))
+	s.TokensTotal = int64(ls.segmentTokens.Sum())
+	s.TokensUnique = int64(ls.segmentTokens.Count())
+
 	return s
-}
-
-// Statistics represents current state of LockSpace.
-type Statistics struct {
-	GroupsPending int64 // number of groups waiting for acquiring locks for all their resources.
-	GroupsLocked  int64 // number of groups waiting acquired locks for all their resources.
-	TokenCount    int64 // number of unique tokens (parts of a path) being stored
-	VertexCount   int64 // number of vertices (parts of a path) being stored
-	PathCount     int64 // number of unique paths requested. There is a refStack with lockRefs for each path.
-	LockrefCount  int64 // number of references to vertexes being stored in refStacks
-}
-
-type lockSpaceStatistics struct {
-	groupsPending int64 // number of groups waiting for acquiring locks for all their resources.
-	groupsLocked  int64 // number of groups waiting acquired locks for all their resources.
-	vertexCount   int64 // number of vertices (parts of a path) being stored
-	pathCount     int64 // number of unique paths requested. There is a refStack with lockRefs for each path.
-	lockrefCount  int64 // number of references to vertexes being stored in refStacks
 }
 
 // LockGroup is used to lock a group of resourceLock's.
@@ -137,7 +156,11 @@ func (ls *LockSpace) LockGroup(lockGroup []ResourceLock, unlocker ...Unlocker) G
 
 	ls.mx.Lock()
 
-	ls.statistics.groupsPending++
+	ls.lastGroupID++
+	groupID := ls.lastGroupID
+
+	atomic.AddInt64(&ls.statistics.groupsPending, 1)
+	fmt.Println("pending +1")
 
 	tokenRefGroup := make([][]tokenRef, len(lockGroup))
 
@@ -148,7 +171,9 @@ func (ls *LockSpace) LockGroup(lockGroup []ResourceLock, unlocker ...Unlocker) G
 	groupVertexes := set.NewSet[*dagLock.Vertex]()
 
 	for i, tokenRefs := range tokenRefGroup {
-		vertex := dagLock.NewVertex(lockGroup[i].LockType)
+		lockType := lockGroup[i].LockType
+		vertex := dagLock.NewVertex(lockType)
+		vAdded := false
 
 		for i := range tokenRefs {
 			path := concatSegmentRefs(tokenRefs[:i+1])
@@ -161,8 +186,11 @@ func (ls *LockSpace) LockGroup(lockGroup []ResourceLock, unlocker ...Unlocker) G
 			refStack, ok := ls.lockSurface[path]
 
 			if !ok {
-				groupVertexes.Add(vertex)
-				ls.lockSurface[path] = []lockRef{{t: refType, r: vertex}}
+				groupVertexes.AddOnce(vertex, &vAdded)
+				ls.lockSurface[path] = []lockRef{{t: refType, v: vertex}}
+
+				atomic.AddInt64(&ls.statistics.lockrefCount, 1)
+
 				continue
 			}
 
@@ -177,8 +205,8 @@ func (ls *LockSpace) LockGroup(lockGroup []ResourceLock, unlocker ...Unlocker) G
 			if refType == head {
 				vertexBound := false
 				for i := len(refStack) - 1; i >= 0; i-- {
-					// Do not bind to siblings' tails.
-					if groupVertexes.Has(refStack[i].r) {
+					// Do not bind to the locks of the group.
+					if groupVertexes.Has(refStack[i].v) {
 						continue
 					}
 
@@ -188,31 +216,33 @@ func (ls *LockSpace) LockGroup(lockGroup []ResourceLock, unlocker ...Unlocker) G
 						}
 
 						vertexBound = true
-						refStack[i].r.AddChild(vertex)
+						refStack[i].v.AddChild(vertex)
 						break
 					}
 
 					vertexBound = true
-					refStack[i].r.AddChild(vertex)
+					refStack[i].v.AddChild(vertex)
 				}
 
 				// Substitute all refs with the new head
-				groupVertexes.Add(vertex)
-				ls.lockSurface[path] = []lockRef{{t: refType, r: vertex}}
+				groupVertexes.AddOnce(vertex, &vAdded)
+				ls.lockSurface[path] = []lockRef{{t: refType, v: vertex}}
+
+				atomic.AddInt64(&ls.statistics.lockrefCount, int64(1-len(refStack)))
 
 				continue
 			}
 
-			// Check if the group has left a tail in the stack.
+			// Check if the group has left a lockRef in the stack.
 			groupLocked := false
 			for _, ref := range refStack {
-				if groupVertexes.Has(ref.r) {
+				if groupVertexes.Has(ref.v) {
 					groupLocked = true
 					break
 				}
 			}
 
-			// If the group has left a tail in the stack, do nothing.
+			// If the group has left a lockRef in the stack, do nothing.
 			if groupLocked {
 				continue
 			}
@@ -220,20 +250,24 @@ func (ls *LockSpace) LockGroup(lockGroup []ResourceLock, unlocker ...Unlocker) G
 			// If there is a head in the stack, bind to it.
 			for i := len(refStack) - 1; i >= 0; i-- {
 				if refStack[i].t == head {
-					refStack[i].r.AddChild(vertex)
+					refStack[i].v.AddChild(vertex)
 					break
 				}
 			}
 
 			// Leave a tail in the stack.
-			groupVertexes.Add(vertex)
-			ls.lockSurface[path] = append(refStack, lockRef{t: refType, r: vertex})
+			groupVertexes.AddOnce(vertex, &vAdded)
+			ls.lockSurface[path] = append(refStack, lockRef{t: refType, v: vertex})
+
+			atomic.AddInt64(&ls.statistics.lockrefCount, 1)
 		}
 	}
 
 	ls.mx.Unlock()
 
 	vertexes := groupVertexes.GetAll()
+
+	vertexCount := len(vertexes)
 
 	go func() {
 		ch := <-u.ch
@@ -243,6 +277,11 @@ func (ls *LockSpace) LockGroup(lockGroup []ResourceLock, unlocker ...Unlocker) G
 		for _, v := range vertexes {
 			v.Unlock()
 		}
+
+		atomic.AddInt64(&ls.statistics.acquiredVertexCount, -int64(vertexCount))
+
+		atomic.AddInt64(&ls.statistics.groupsAcquired, -1)
+		fmt.Println("acquired -1")
 
 		close(ch)
 
@@ -254,34 +293,42 @@ func (ls *LockSpace) LockGroup(lockGroup []ResourceLock, unlocker ...Unlocker) G
 
 		ls.garbage <- tokenRefGroup
 
-		ls.statistics.groupsLocked--
-
 		ls.activeLockers.Done()
 	}()
 
 	lockWaiter := GroupLocker{
 		u:  u,
 		ch: make(chan Unlocker, 1),
+		id: groupID,
 	}
+
+	atomic.AddInt64(&ls.statistics.pendingVertexCount, int64(vertexCount))
 
 	for i, v := range vertexes {
 		vertexLock := v.LockChan()
 
 		select {
 		case <-vertexLock:
+			atomic.AddInt64(&ls.statistics.pendingVertexCount, -1)
+			atomic.AddInt64(&ls.statistics.acquiredVertexCount, 1)
 			continue
 		default:
 			go func() {
 				<-vertexLock
+				atomic.AddInt64(&ls.statistics.pendingVertexCount, -1)
+				atomic.AddInt64(&ls.statistics.acquiredVertexCount, 1)
 
 				for _, v := range vertexes[i+1:] {
 					v.Lock()
+					atomic.AddInt64(&ls.statistics.pendingVertexCount, -1)
+					atomic.AddInt64(&ls.statistics.acquiredVertexCount, 1)
 				}
 
-				lockWaiter.makeReady(u)
+				atomic.AddInt64(&ls.statistics.groupsPending, -1)
+				atomic.AddInt64(&ls.statistics.groupsAcquired, 1)
+				fmt.Println("pending -1, acquired +1")
 
-				ls.statistics.groupsPending--
-				ls.statistics.groupsLocked++
+				lockWaiter.makeReady(u)
 			}()
 
 			return lockWaiter
@@ -290,8 +337,9 @@ func (ls *LockSpace) LockGroup(lockGroup []ResourceLock, unlocker ...Unlocker) G
 
 	lockWaiter.makeReady(u)
 
-	ls.statistics.groupsPending--
-	ls.statistics.groupsLocked++
+	atomic.AddInt64(&ls.statistics.groupsPending, -1)
+	atomic.AddInt64(&ls.statistics.groupsAcquired, 1)
+	fmt.Println("pending -1, acquired +1")
 
 	return lockWaiter
 }
@@ -315,7 +363,7 @@ func (ls *LockSpace) releaseTokens(segments []string) {
 }
 
 func (ls *LockSpace) cleanRefStacks() {
-	var opened bool
+	opened := true
 
 	for opened {
 		segmentGroupList := make([][][]tokenRef, 0, 1)
@@ -359,7 +407,7 @@ func (ls *LockSpace) cleanRefStacks() {
 			keepFrom := 0
 
 			for i, segmentRef := range refStack {
-				if !segmentRef.r.Useless() {
+				if !segmentRef.v.Useless() {
 					break
 				}
 
@@ -369,6 +417,8 @@ func (ls *LockSpace) cleanRefStacks() {
 			if keepFrom == 0 {
 				continue
 			}
+
+			atomic.AddInt64(&ls.statistics.lockrefCount, -int64(keepFrom))
 
 			if keepFrom == len(refStack) {
 				delete(ls.lockSurface, path)

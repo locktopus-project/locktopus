@@ -171,6 +171,10 @@ func (v *Vertex) Useless() bool {
 	return v.lockState == Unlocked && !v.hasParents()
 }
 
+func (v *Vertex) LockType() LockType {
+	return v.lockType
+}
+
 func (v *Vertex) allParentsReleased() bool {
 	return len(v.releasedParents) == len(v.parents)
 }

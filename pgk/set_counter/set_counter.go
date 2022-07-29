@@ -31,10 +31,11 @@ func (sc *SetCounter) Store(key string) (value *int64) {
 	if !exists {
 		value = new(int64)
 		sc.m[key] = value
-		sc.count++
 	}
 
 	atomic.AddInt64(value, 1)
+
+	sc.count++
 
 	return value
 }
@@ -47,12 +48,21 @@ func (sc *SetCounter) Release(key string) *int64 {
 
 	atomic.AddInt64(value, -1)
 
+	sc.count--
+
 	if atomic.LoadInt64(value) == 0 {
 		delete(sc.m, key)
 
-		sc.count--
 		return nil
 	}
 
 	return value
+}
+
+func (sc *SetCounter) Sum() int64 {
+	return sc.count
+}
+
+func (sc *SetCounter) Count() int64 {
+	return int64(len(sc.m))
 }

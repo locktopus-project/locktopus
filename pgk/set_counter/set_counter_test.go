@@ -54,3 +54,67 @@ func TestTokenSet_Get(t *testing.T) {
 		tm.Release("some_key")
 	})
 }
+
+func TestSetCounter_Sum(t *testing.T) {
+	sc := NewSetCounter()
+
+	if s := sc.Sum(); s != 0 {
+		t.Errorf("SetCounter.Sum() = %v, want 0", s)
+	}
+
+	sc.Store("some_key")
+
+	if s := sc.Sum(); s != 1 {
+		t.Errorf("SetCounter.Sum() = %v, want 1", s)
+	}
+
+	sc.Store("some_key")
+
+	if s := sc.Sum(); s != 2 {
+		t.Errorf("SetCounter.Sum() = %v, want 2", s)
+	}
+
+	sc.Release("some_key")
+
+	if s := sc.Sum(); s != 1 {
+		t.Errorf("SetCounter.Sum() = %v, want 1", s)
+	}
+
+	sc.Release("some_key")
+
+	if s := sc.Sum(); s != 0 {
+		t.Errorf("SetCounter.Sum() = %v, want 0", s)
+	}
+}
+
+func TestSetCounter_Count(t *testing.T) {
+	sc := NewSetCounter()
+
+	if s := sc.Count(); s != 0 {
+		t.Errorf("SetCounter.Count() = %v, want 0", s)
+	}
+
+	sc.Store("some_key")
+
+	if s := sc.Count(); s != 1 {
+		t.Errorf("SetCounter.Count() = %v, want 1", s)
+	}
+
+	sc.Store("some_key")
+
+	if s := sc.Count(); s != 1 {
+		t.Errorf("SetCounter.Count() = %v, want 1", s)
+	}
+
+	sc.Release("some_key")
+
+	if s := sc.Count(); s != 1 {
+		t.Errorf("SetCounter.Count() = %v, want 1", s)
+	}
+
+	sc.Release("some_key")
+
+	if s := sc.Count(); s != 0 {
+		t.Errorf("SetCounter.Count() = %v, want 0", s)
+	}
+}
