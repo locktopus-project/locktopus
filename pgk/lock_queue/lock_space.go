@@ -1,7 +1,6 @@
 package lockqueue
 
 import (
-	"fmt"
 	"sync"
 	"sync/atomic"
 	"unsafe"
@@ -160,7 +159,6 @@ func (ls *LockSpace) LockGroup(lockGroup []ResourceLock, unlocker ...Unlocker) G
 	groupID := ls.lastGroupID
 
 	atomic.AddInt64(&ls.statistics.groupsPending, 1)
-	fmt.Println("pending +1")
 
 	tokenRefGroup := make([][]tokenRef, len(lockGroup))
 
@@ -281,7 +279,6 @@ func (ls *LockSpace) LockGroup(lockGroup []ResourceLock, unlocker ...Unlocker) G
 		atomic.AddInt64(&ls.statistics.acquiredVertexCount, -int64(vertexCount))
 
 		atomic.AddInt64(&ls.statistics.groupsAcquired, -1)
-		fmt.Println("acquired -1")
 
 		close(ch)
 
@@ -326,7 +323,6 @@ func (ls *LockSpace) LockGroup(lockGroup []ResourceLock, unlocker ...Unlocker) G
 
 				atomic.AddInt64(&ls.statistics.groupsPending, -1)
 				atomic.AddInt64(&ls.statistics.groupsAcquired, 1)
-				fmt.Println("pending -1, acquired +1")
 
 				lockWaiter.makeReady(u)
 			}()
@@ -339,7 +335,6 @@ func (ls *LockSpace) LockGroup(lockGroup []ResourceLock, unlocker ...Unlocker) G
 
 	atomic.AddInt64(&ls.statistics.groupsPending, -1)
 	atomic.AddInt64(&ls.statistics.groupsAcquired, 1)
-	fmt.Println("pending -1, acquired +1")
 
 	return lockWaiter
 }
