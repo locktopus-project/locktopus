@@ -82,7 +82,7 @@ func (v *Vertex) AddChild(child *Vertex) {
 		panic("Cannot bind released child. Fix your logic")
 	}
 
-	if !v.hasParents() && v.lockState < Released {
+	if !v.HasParents() && v.lockState < Released {
 		v.lockState = Released
 	}
 
@@ -168,18 +168,22 @@ func (v *Vertex) Unlock() {
 
 // Useless means that adding children to v has no point. However, doig so is not forbidden and will result in no-op.
 func (v *Vertex) Useless() bool {
-	return v.lockState == Unlocked && !v.hasParents()
+	return v.lockState == Unlocked && !v.HasParents()
 }
 
 func (v *Vertex) LockType() LockType {
 	return v.lockType
 }
 
+func (v *Vertex) LockState() LockState {
+	return v.lockState
+}
+
 func (v *Vertex) allParentsReleased() bool {
 	return len(v.releasedParents) == len(v.parents)
 }
 
-func (v *Vertex) hasParents() bool {
+func (v *Vertex) HasParents() bool {
 	return len(v.parents) > 0
 }
 
@@ -202,7 +206,7 @@ func (v *Vertex) refreshState() {
 	v._mx.Lock()
 	defer v._mx.Unlock()
 
-	if !v.hasParents() {
+	if !v.HasParents() {
 		if v.lockState == Unlocked {
 			for node := range v.children {
 				node.unbindParent(v)
