@@ -286,6 +286,17 @@ func (ls *LockSpace) LockGroup(lockGroup []ResourceLock, unlocker ...Unlocker) G
 
 		ls.mx.Unlock()
 
+		// Read Vertexes may still have parents. If so, we need to ensure they are unlocked before trying to clean the paths.
+		for _, v := range vertexes {
+			if !v.Useless() {
+				vr := dagLock.NewVertex(LockTypeWrite)
+				v.AddChild(vr)
+				vr.Lock()
+				_ = 0 // get rid of "empty critical section" warning message
+				vr.Unlock()
+			}
+		}
+
 		ls.garbage <- tokenRefGroup
 
 		ls.activeLockers.Done()

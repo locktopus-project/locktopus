@@ -791,3 +791,40 @@ func TestStatistics_LockrefCount(t *testing.T) {
 		t.Errorf("Expected LockrefCount = 0, got %d", s2.LockrefCount)
 	}
 }
+
+func TestStop_PathCount(t *testing.T) {
+	ls := NewLockSpaceRun()
+
+	lr := NewResourceLock(LockTypeRead, []string{"0"})
+	lr1 := NewResourceLock(LockTypeRead, []string{})
+
+	N := 10000
+	wg := sync.WaitGroup{}
+
+	for j := 0; j < N; j++ {
+		wg.Add(1)
+
+		l := ls.LockGroup([]ResourceLock{lr})
+		l1 := ls.LockGroup([]ResourceLock{lr1})
+
+		l.Acquire()
+		l.Acquire().Unlock()
+
+		go func() {
+			l1.Acquire()
+			l1.Acquire().Unlock()
+
+			wg.Done()
+		}()
+	}
+
+	wg.Wait()
+
+	ls.Stop()
+
+	s := ls.Statistics()
+
+	if s.PathCount != 0 {
+		t.Errorf("Expected PathCount = 0, got %d", s.PathCount)
+	}
+}
