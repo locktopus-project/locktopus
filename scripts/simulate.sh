@@ -1,0 +1,1 @@
+go build -o ./bin/simulate cmd/simulation/simulation.go && ./bin/simulate
