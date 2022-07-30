@@ -8,6 +8,8 @@ import (
 	"unsafe"
 )
 
+type tokenRef uintptr
+
 const uintptrSize = unsafe.Sizeof(uintptr(0))
 
 func uintptrToBytes(v tokenRef) []byte {

@@ -56,8 +56,6 @@ type LockSpace struct {
 	lastGroupID     int64
 }
 
-type tokenRef uintptr
-
 // Statistics represents current state of LockSpace. All values (except LastGroupID) are non-accumulative
 type Statistics struct {
 	LastGroupID    int64 // Sequence number of the last group (starting from 1)
