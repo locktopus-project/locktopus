@@ -798,7 +798,7 @@ func TestStop_PathCount(t *testing.T) {
 	lr := NewResourceLock(LockTypeRead, []string{"0"})
 	lr1 := NewResourceLock(LockTypeRead, []string{})
 
-	N := 10000
+	N := 100
 	wg := sync.WaitGroup{}
 
 	for j := 0; j < N; j++ {
