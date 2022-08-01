@@ -52,7 +52,7 @@ func main() {
 
 	var expectedRate = float64(float64(concurrency) / float64(maxLockDurationMs) * 1000 * 2)
 
-	ls := lockSpace.NewLockSpaceRun()
+	ls := lockSpace.NewLockSpace()
 
 	for i := 0; i < concurrency; i++ {
 		go simulateClient(ch, ls)
@@ -121,7 +121,7 @@ func main() {
 		needPrintStats = false
 	}
 
-	ls.Stop()
+	ls.Close()
 
 	fmt.Printf("%+v\n", ls.Statistics())
 	fmt.Println("end")

@@ -42,7 +42,7 @@ type lockRef struct {
 }
 
 // LockSpace allows you to acquire an atomic lock for a set of ResourceLocks.
-// Use NewLockSpaceRun() to create a new LockSpace and Stop() to finish the goroutines it spawns.
+// Use NewLockSpaceRun() to create a new LockSpace and Close() to finish the goroutines it spawns.
 type LockSpace struct {
 	mx              sync.Mutex
 	segmentTokens   setCounter.SetCounter
@@ -77,7 +77,7 @@ type lockSpaceStatistics struct {
 	lockrefCount        int64
 }
 
-func NewLockSpaceRun() *LockSpace {
+func NewLockSpace() *LockSpace {
 	ls := LockSpace{
 		segmentTokens:   setCounter.NewSetCounter(),
 		lockSurface:     make(map[string][]lockRef),
@@ -93,8 +93,8 @@ func NewLockSpaceRun() *LockSpace {
 	return &ls
 }
 
-// Stop forbids locking new groups and returns when the cleaner finishes with the remaining garbage.
-func (ls *LockSpace) Stop() {
+// Close forbids locking new groups and returns when the cleaner finishes with the remaining garbage.
+func (ls *LockSpace) Close() {
 	if atomic.AddInt32(&ls.closed, 1) > 1 {
 		panic("LockSpace is already closed")
 	}

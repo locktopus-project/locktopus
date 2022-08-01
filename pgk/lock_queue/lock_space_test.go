@@ -33,7 +33,7 @@ func assertOrder(t *testing.T, order []int, expected []int) {
 }
 
 func TestLockSpace_SecondArgumentIsReceivedFromChan(t *testing.T) {
-	ls := NewLockSpaceRun()
+	ls := NewLockSpace()
 
 	lr := NewResourceLock(internal.LockTypeRead, []string{"a", "b", "c"})
 
@@ -46,7 +46,7 @@ func TestLockSpace_SecondArgumentIsReceivedFromChan(t *testing.T) {
 }
 
 func TestLockSpace_SingleGroupShouldBeLockedImmediately(t *testing.T) {
-	ls := NewLockSpaceRun()
+	ls := NewLockSpace()
 
 	lr := NewResourceLock(internal.LockTypeRead, []string{"a", "b", "c"})
 
@@ -54,7 +54,7 @@ func TestLockSpace_SingleGroupShouldBeLockedImmediately(t *testing.T) {
 }
 
 func TestLockSpace_DuplicateRecordsShouldNotBringDeadlock(t *testing.T) {
-	ls := NewLockSpaceRun()
+	ls := NewLockSpace()
 
 	lr1 := NewResourceLock(internal.LockTypeWrite, []string{"a", "b", "c"})
 	lr2 := NewResourceLock(internal.LockTypeWrite, []string{"a", "b", "c"})
@@ -63,7 +63,7 @@ func TestLockSpace_DuplicateRecordsShouldNotBringDeadlock(t *testing.T) {
 }
 
 func TestLockSpace_ConcurrentGroupShouldBlock(t *testing.T) {
-	ls := NewLockSpaceRun()
+	ls := NewLockSpace()
 
 	lr1 := NewResourceLock(internal.LockTypeWrite, []string{"a", "b", "c"})
 	ls.LockGroup([]ResourceLock{lr1})
@@ -75,7 +75,7 @@ func TestLockSpace_ConcurrentGroupShouldBlock(t *testing.T) {
 }
 
 func TestLockSpace_EmptyPathShouldAlsoCauseBlock(t *testing.T) {
-	ls := NewLockSpaceRun()
+	ls := NewLockSpace()
 
 	lr1 := NewResourceLock(internal.LockTypeWrite, []string{})
 	ls.LockGroup([]ResourceLock{lr1})
@@ -86,7 +86,7 @@ func TestLockSpace_EmptyPathShouldAlsoCauseBlock(t *testing.T) {
 }
 
 func TestLockSpace_TestRelease(t *testing.T) {
-	ls := NewLockSpaceRun()
+	ls := NewLockSpace()
 
 	path := []string{"a", "b", "c"}
 
@@ -107,7 +107,7 @@ func TestLockSpace_TestRelease(t *testing.T) {
 }
 
 func TestLockSpace_ParallelWritesShouldSucced(t *testing.T) {
-	ls := NewLockSpaceRun()
+	ls := NewLockSpace()
 
 	lr1 := NewResourceLock(internal.LockTypeWrite, []string{"a", "b", "1"})
 	w := ls.LockGroup([]ResourceLock{lr1})
@@ -119,7 +119,7 @@ func TestLockSpace_ParallelWritesShouldSucced(t *testing.T) {
 }
 
 func TestLockSpace_ParallelReadsShouldSucced(t *testing.T) {
-	ls := NewLockSpaceRun()
+	ls := NewLockSpace()
 
 	lr1 := NewResourceLock(internal.LockTypeRead, []string{"a", "b", "1"})
 	w := ls.LockGroup([]ResourceLock{lr1})
@@ -131,7 +131,7 @@ func TestLockSpace_ParallelReadsShouldSucced(t *testing.T) {
 }
 
 func TestLockSpace_SequentialWritesShouldBlocked_Postfix(t *testing.T) {
-	ls := NewLockSpaceRun()
+	ls := NewLockSpace()
 
 	lr1 := NewResourceLock(internal.LockTypeWrite, []string{"a", "b"})
 	ls.LockGroup([]ResourceLock{lr1})
@@ -143,7 +143,7 @@ func TestLockSpace_SequentialWritesShouldBlocked_Postfix(t *testing.T) {
 }
 
 func TestLockSpace_SequentialWritesShouldBlocked_Prefix(t *testing.T) {
-	ls := NewLockSpaceRun()
+	ls := NewLockSpace()
 
 	lr1 := NewResourceLock(internal.LockTypeWrite, []string{"a", "b", "2"})
 	ls.LockGroup([]ResourceLock{lr1})
@@ -155,7 +155,7 @@ func TestLockSpace_SequentialWritesShouldBlocked_Prefix(t *testing.T) {
 }
 
 func TestLockSpace_AdjacentReadsDoNotBlockEachOther(t *testing.T) {
-	ls := NewLockSpaceRun()
+	ls := NewLockSpace()
 
 	lr1 := NewResourceLock(internal.LockTypeWrite, []string{"a"})
 	w1 := ls.LockGroup([]ResourceLock{lr1})
@@ -234,7 +234,7 @@ func TestLockSpace_AdjacentReadsDoNotBlockEachOther(t *testing.T) {
 }
 
 func TestLockSpace_PartialWriteOverlapping(t *testing.T) {
-	ls := NewLockSpaceRun()
+	ls := NewLockSpace()
 
 	rl1 := NewResourceLock(internal.LockTypeWrite, []string{"a", "1"})
 	rl2 := NewResourceLock(internal.LockTypeWrite, []string{"a", "2"})
@@ -264,7 +264,7 @@ func TestLockSpace_PartialWriteOverlapping(t *testing.T) {
 }
 
 func TestLockSpace_PartialReadOverlapping(t *testing.T) {
-	ls := NewLockSpaceRun()
+	ls := NewLockSpace()
 
 	rl1 := NewResourceLock(internal.LockTypeWrite, []string{"a", "1"})
 	rl2 := NewResourceLock(internal.LockTypeWrite, []string{"a", "2"})
@@ -287,7 +287,7 @@ func TestLockSpace_PartialReadOverlapping(t *testing.T) {
 }
 
 func TestLockSpace_HeadAfterTail(t *testing.T) {
-	ls := NewLockSpaceRun()
+	ls := NewLockSpace()
 
 	rl1 := NewResourceLock(internal.LockTypeWrite, []string{"a", "1"})
 	w1 := ls.LockGroup([]ResourceLock{rl1})
@@ -305,7 +305,7 @@ func TestLockSpace_HeadAfterTail(t *testing.T) {
 }
 
 func TestLockSpace_TailAfterHead(t *testing.T) {
-	ls := NewLockSpaceRun()
+	ls := NewLockSpace()
 
 	rl01 := NewResourceLock(internal.LockTypeRead, []string{"a"})
 	rl02 := NewResourceLock(internal.LockTypeWrite, []string{"a", "b"})
@@ -326,7 +326,7 @@ func TestLockSpace_TailAfterHead(t *testing.T) {
 }
 
 func TestLockSpace_Complex_1(t *testing.T) {
-	ls := NewLockSpaceRun()
+	ls := NewLockSpace()
 	order := sliceAppender.NewSliceAppender[int]()
 
 	lr1 := NewResourceLock(internal.LockTypeRead, []string{"a"})
@@ -383,7 +383,7 @@ func TestLockSpace_Complex_1(t *testing.T) {
 }
 
 func TestLockSpace_Complex_2(t *testing.T) {
-	ls := NewLockSpaceRun()
+	ls := NewLockSpace()
 	order := sliceAppender.NewSliceAppender[int]()
 
 	wg := sync.WaitGroup{}
@@ -513,11 +513,11 @@ func TestLockSpace_Complex_2(t *testing.T) {
 }
 
 func TestStop_StopAfterStop(t *testing.T) {
-	ls := NewLockSpaceRun()
+	ls := NewLockSpace()
 
 	_ = ls
 
-	ls.Stop()
+	ls.Close()
 
 	defer func() {
 		if r := recover(); r == nil {
@@ -525,13 +525,13 @@ func TestStop_StopAfterStop(t *testing.T) {
 		}
 	}()
 
-	ls.Stop()
+	ls.Close()
 }
 
 func TestStop_LockGroupAfterStop(t *testing.T) {
-	ls := NewLockSpaceRun()
+	ls := NewLockSpace()
 
-	ls.Stop()
+	ls.Close()
 
 	defer func() {
 		if r := recover(); r == nil {
@@ -543,7 +543,7 @@ func TestStop_LockGroupAfterStop(t *testing.T) {
 }
 
 func TestLockSpace_GroupID(t *testing.T) {
-	ls := NewLockSpaceRun()
+	ls := NewLockSpace()
 
 	w1 := ls.LockGroup([]ResourceLock{NewResourceLock(LockTypeRead, []string{"a"})})
 	w2 := ls.LockGroup([]ResourceLock{NewResourceLock(LockTypeRead, []string{"a"})})
@@ -558,7 +558,7 @@ func TestLockSpace_GroupID(t *testing.T) {
 }
 
 func TestStatistics_LastGroupID(t *testing.T) {
-	ls := NewLockSpaceRun()
+	ls := NewLockSpace()
 
 	lr := NewResourceLock(LockTypeWrite, []string{"a", "b", "c"})
 	locker := ls.LockGroup([]ResourceLock{lr})
@@ -569,7 +569,7 @@ func TestStatistics_LastGroupID(t *testing.T) {
 }
 
 func TestStatistics_Tokens(t *testing.T) {
-	ls := NewLockSpaceRun()
+	ls := NewLockSpace()
 
 	s0 := ls.Statistics()
 
@@ -602,7 +602,7 @@ func TestStatistics_Tokens(t *testing.T) {
 }
 
 func TestStatistics_Groups(t *testing.T) {
-	ls := NewLockSpaceRun()
+	ls := NewLockSpace()
 
 	s0 := ls.Statistics()
 
@@ -670,7 +670,7 @@ func TestStatistics_Groups(t *testing.T) {
 }
 
 func TestStatistics_Locks(t *testing.T) {
-	ls := NewLockSpaceRun()
+	ls := NewLockSpace()
 
 	s0 := ls.Statistics()
 
@@ -735,7 +735,7 @@ func TestStatistics_Locks(t *testing.T) {
 }
 
 func TestStatistics_LockShadowing_Write(t *testing.T) {
-	ls := NewLockSpaceRun()
+	ls := NewLockSpace()
 
 	lr0 := NewResourceLock(LockTypeWrite, []string{"a"})
 	// Shadowed by lr0
@@ -751,7 +751,7 @@ func TestStatistics_LockShadowing_Write(t *testing.T) {
 }
 
 func TestStatistics_LockShadowing_WriteAfterRead(t *testing.T) {
-	ls := NewLockSpaceRun()
+	ls := NewLockSpace()
 
 	lr0 := NewResourceLock(LockTypeRead, []string{"a"})
 	// Not shadowed by lr0
@@ -765,7 +765,7 @@ func TestStatistics_LockShadowing_WriteAfterRead(t *testing.T) {
 }
 
 func TestStatistics_LockrefCount(t *testing.T) {
-	ls := NewLockSpaceRun()
+	ls := NewLockSpace()
 
 	s0 := ls.Statistics()
 
@@ -784,7 +784,7 @@ func TestStatistics_LockrefCount(t *testing.T) {
 
 	l.Acquire().Unlock()
 
-	ls.Stop()
+	ls.Close()
 
 	s2 := ls.Statistics()
 	if s2.LockrefCount != 0 {
@@ -793,7 +793,7 @@ func TestStatistics_LockrefCount(t *testing.T) {
 }
 
 func TestStop_PathCount(t *testing.T) {
-	ls := NewLockSpaceRun()
+	ls := NewLockSpace()
 
 	lr := NewResourceLock(LockTypeRead, []string{"0"})
 	lr1 := NewResourceLock(LockTypeRead, []string{})
@@ -820,7 +820,7 @@ func TestStop_PathCount(t *testing.T) {
 
 	wg.Wait()
 
-	ls.Stop()
+	ls.Close()
 
 	s := ls.Statistics()
 
