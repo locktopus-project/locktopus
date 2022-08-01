@@ -2,7 +2,6 @@ package lockqueue
 
 import (
 	"encoding/binary"
-	"fmt"
 	"sort"
 	"strings"
 	"unsafe"
@@ -15,14 +14,14 @@ const uintptrSize = unsafe.Sizeof(uintptr(0))
 func uintptrToBytes(v tokenRef) []byte {
 	b := make([]byte, uintptrSize)
 
-	switch uintptrSize {
-	case 4:
-		binary.LittleEndian.PutUint32(b, uint32(v))
-	case 8:
-		binary.LittleEndian.PutUint64(b, uint64(v))
-	default:
-		panic(fmt.Sprintf("unknown uintptr size: %v", uintptrSize))
-	}
+	// switch uintptrSize {
+	// case 4:
+	// 	binary.LittleEndian.PutUint32(b, uint32(v))
+	// case 8:
+	binary.LittleEndian.PutUint64(b, uint64(v))
+	// default:
+	// 	panic(fmt.Sprintf("unknown uintptr size: %v", uintptrSize))
+	// }
 
 	return b
 }
