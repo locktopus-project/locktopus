@@ -1,6 +1,6 @@
 package lockqueue
 
-type GroupLocker struct {
+type Locker struct {
 	ch chan Unlocker
 	u  Unlocker
 	id int64
@@ -11,18 +11,18 @@ type GroupLocker struct {
 // The reason why the name differs is that the lock actually starts its lifecycle within LockGroup() call.
 // Use the returned value to unlock the group.
 // It is possible to call Acquire() multiple times.
-func (l GroupLocker) Acquire() Unlocker {
+func (l Locker) Acquire() Unlocker {
 	<-l.ch
 
 	return l.u
 }
 
 // ID returns unique incremental ID of the group within the LockSpace
-func (l GroupLocker) ID() int64 {
+func (l Locker) ID() int64 {
 	return l.id
 }
 
-func (l GroupLocker) makeReady(u Unlocker) {
+func (l Locker) makeReady(u Unlocker) {
 	l.u = u
 	l.ch <- l.u
 	close(l.ch)

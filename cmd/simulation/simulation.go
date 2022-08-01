@@ -143,7 +143,7 @@ func getRandomDuration() time.Duration {
 }
 
 func simulateLock(resources []lockSpace.ResourceLock, ls *lockSpace.LockSpace, duration time.Duration) {
-	lock := ls.LockGroup(resources)
+	lock := ls.Lock(resources)
 	u := lock.Acquire()
 
 	if duration > 0 {

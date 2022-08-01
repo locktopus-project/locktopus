@@ -53,7 +53,7 @@ type LockSpace struct {
 	cleanerFinished chan struct{}
 	closed          int32
 	statistics      lockSpaceStatistics
-	lastGroupID     int64
+	lastLockID      int64
 }
 
 // Statistics represents current state of LockSpace. All values (except LastGroupID) are non-accumulative
@@ -93,7 +93,7 @@ func NewLockSpace() *LockSpace {
 	return &ls
 }
 
-// Close forbids locking new groups and returns when the cleaner finishes with the remaining garbage.
+// Close forbids making new locks and returns when the cleaner finishes with the remaining garbage.
 func (ls *LockSpace) Close() {
 	if atomic.AddInt32(&ls.closed, 1) > 1 {
 		panic("LockSpace is already closed")
@@ -112,7 +112,7 @@ func (ls *LockSpace) Statistics() Statistics {
 
 	s := Statistics{}
 
-	s.LastGroupID = ls.lastGroupID
+	s.LastGroupID = ls.lastLockID
 
 	s.GroupsPending = atomic.LoadInt64(&ls.statistics.groupsPending)
 	s.GroupsAcquired = atomic.LoadInt64(&ls.statistics.groupsAcquired)
@@ -129,12 +129,11 @@ func (ls *LockSpace) Statistics() Statistics {
 	return s
 }
 
-// LockGroup is used to lock a group of resourceLock's.
+// Lock is used to lock a group of resourceLock's.
 // You may pass you own unlocker as the second argument (unlock) and use it to unlock the group.
 // The returned value can be used to receive the reference to the second argument (unlock) if provided.
 // If unlock is not provided, it is made internally. This is the preferred way to ensure you won't unlock the group before it acquires the lock.
-// It is safe to call LockGroup multiple times.
-func (ls *LockSpace) LockGroup(lockGroup []ResourceLock, unlocker ...Unlocker) GroupLocker {
+func (ls *LockSpace) Lock(resourceLocks []ResourceLock, unlocker ...Unlocker) Locker {
 	ls.activeLockers.Add(1)
 
 	if atomic.LoadInt32(&ls.closed) > 0 {
@@ -151,10 +150,16 @@ func (ls *LockSpace) LockGroup(lockGroup []ResourceLock, unlocker ...Unlocker) G
 		u = NewUnlocker()
 	}
 
+	locker := ls.lockResources(resourceLocks, u)
+
+	return locker
+}
+
+func (ls *LockSpace) lockResources(lockGroup []ResourceLock, u Unlocker) Locker {
 	ls.mx.Lock()
 
-	ls.lastGroupID++
-	groupID := ls.lastGroupID
+	ls.lastLockID++
+	lockID := ls.lastLockID
 
 	atomic.AddInt64(&ls.statistics.groupsPending, 1)
 
@@ -265,47 +270,12 @@ func (ls *LockSpace) LockGroup(lockGroup []ResourceLock, unlocker ...Unlocker) G
 
 	vertexCount := len(vertexes)
 
-	go func() {
-		ch := <-u.ch
+	go ls.handleUnlocker(u, vertexes, lockGroup, tokenRefGroup)
 
-		ls.mx.Lock()
-
-		for _, v := range vertexes {
-			v.Unlock()
-		}
-
-		atomic.AddInt64(&ls.statistics.acquiredVertexCount, -int64(vertexCount))
-
-		atomic.AddInt64(&ls.statistics.groupsAcquired, -1)
-
-		close(ch)
-
-		for _, l := range lockGroup {
-			ls.releaseTokens(l.Path)
-		}
-
-		ls.mx.Unlock()
-
-		// Read Vertexes may still have parents. If so, we need to ensure they are unlocked before trying to clean the paths.
-		for _, v := range vertexes {
-			if !v.Useless() {
-				vr := dagLock.NewVertex(LockTypeWrite)
-				v.AddChild(vr)
-				vr.Lock()
-				_ = 0 // get rid of "empty critical section" warning message
-				vr.Unlock()
-			}
-		}
-
-		ls.garbage <- tokenRefGroup
-
-		ls.activeLockers.Done()
-	}()
-
-	lockWaiter := GroupLocker{
+	lockWaiter := Locker{
 		u:  u,
 		ch: make(chan Unlocker, 1),
-		id: groupID,
+		id: lockID,
 	}
 
 	atomic.AddInt64(&ls.statistics.pendingVertexCount, int64(vertexCount))
@@ -436,4 +406,46 @@ func (ls *LockSpace) cleanRefStacks() {
 	}
 
 	ls.cleanerFinished <- struct{}{}
+}
+
+func (ls *LockSpace) handleUnlocker(u Unlocker, vertexes []*dagLock.Vertex, resourceLocks []ResourceLock, tokenRefGroup [][]tokenRef) {
+	ch := <-u.ch
+
+	ls.mx.Lock()
+
+	vertexesInUse := make([]*dagLock.Vertex, 0)
+
+	for _, v := range vertexes {
+		v.Unlock()
+
+		if !v.Useless() {
+			vertexesInUse = append(vertexesInUse, v)
+		}
+	}
+
+	atomic.AddInt64(&ls.statistics.acquiredVertexCount, -int64(len(vertexes)))
+	atomic.AddInt64(&ls.statistics.groupsAcquired, -1)
+
+	close(ch)
+
+	for _, l := range resourceLocks {
+		ls.releaseTokens(l.Path)
+	}
+
+	ls.mx.Unlock()
+
+	// Read Vertexes may still have parents. If so, we need to ensure they are unlocked before trying to clean the paths.
+	vw := dagLock.NewVertex(LockTypeWrite)
+
+	for _, v := range vertexesInUse {
+		v.AddChild(vw)
+	}
+
+	vw.Lock()
+	_ = 0 // get rid of "empty critical section" warning message
+	vw.Unlock()
+
+	ls.garbage <- tokenRefGroup
+
+	ls.activeLockers.Done()
 }
