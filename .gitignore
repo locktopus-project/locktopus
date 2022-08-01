@@ -1,2 +1,3 @@
 bin/simulation
 cmd/sandbox/sandbox.go
+pprof/

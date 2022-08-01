@@ -1,29 +1,58 @@
 package main
 
 import (
+	"flag"
 	"fmt"
+	"log"
 	"math/rand"
+	"os"
+	"os/signal"
 	"runtime"
+	"runtime/pprof"
+	"syscall"
 	"time"
 
 	lockSpace "github.com/xshkut/distributed-lock/pgk/lock_queue"
 )
 
-const branchingFactor = 10
-const maxTreeDepth = 10
-const fullRangeLockPeriod = 10
+const branchingFactor = 100
+const maxTreeDepth = 5
+const fullRangeLockPeriod = 1000
 const maxGroupSize = 5
-const concurrency = 1 * 100000
-const maxLockDurationMs = 1
+const concurrency = 2000
+const maxLockDurationMs = 50
 
-const statsPeriod = 10000
+const statsPeriodSec = 1
 
-var expectedRate = float64(float64(concurrency) / float64(maxLockDurationMs) * 1000 * 2)
+var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
+
+func init() {
+	flag.Parse()
+}
 
 func main() {
-	ch := make(chan int)
+	var fm *os.File
 
-	ls := lockSpace.NewLockSpace()
+	if *cpuprofile != "" {
+		f, err := os.Create(*cpuprofile)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		fm, err = os.Create(*cpuprofile + ".mem")
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
+	}
+
+	ch := make(chan struct{})
+
+	var expectedRate = float64(float64(concurrency) / float64(maxLockDurationMs) * 1000 * 2)
+
+	ls := lockSpace.NewLockSpaceRun()
 
 	for i := 0; i < concurrency; i++ {
 		go simulateClient(ch, ls)
@@ -34,46 +63,83 @@ func main() {
 
 	time.Sleep(time.Duration(1) * time.Second)
 
-	i := 0
+	keepRunning := true
+	needPrintStats := false
 	lastTime := time.Now()
-	for {
-		ch <- i
-		i++
+	lastCount := int64(0)
 
-		if i == statsPeriod {
-			i = 0
+	printStatsAfter := time.After(time.Duration(statsPeriodSec) * time.Second)
+
+	memStats := runtime.MemStats{}
+	runtime.ReadMemStats(&memStats)
+
+	initialMemUsage := memStats.Sys
+
+	go func() {
+		signals := make(chan os.Signal, 1)
+		signal.Notify(signals, syscall.SIGTERM, syscall.SIGINT)
+
+		sig := <-signals
+		if sig == syscall.SIGTERM || sig == syscall.SIGINT {
+			keepRunning = false
+		}
+		fmt.Println("Received signal:", sig)
+	}()
+
+	for keepRunning {
+		ch <- struct{}{}
+
+		select {
+		case <-printStatsAfter:
+			needPrintStats = true
+			printStatsAfter = time.After(time.Duration(statsPeriodSec) * time.Second)
+		default:
+		}
+
+		if needPrintStats {
 			now := time.Now()
+
+			stats := ls.Statistics()
 
 			memStats := runtime.MemStats{}
 			runtime.ReadMemStats(&memStats)
 
-			bytesPerClient := int(memStats.Sys / uint64(concurrency))
+			bytesPerClient := int((memStats.Sys - initialMemUsage) / uint64(concurrency))
 			takenTime := now.Sub(lastTime)
-			rate := float64(statsPeriod) / takenTime.Seconds()
+			count := stats.LastGroupID - lastCount
+			rate := float64(count) / takenTime.Seconds()
 			performance := rate / expectedRate * 100
-			fmt.Println(statsPeriod, "locks simulated. Taken time:", takenTime.String(), ". Rate =", int(rate), "locks/sec", ". Performance =", fmt.Sprintf("%.2f", performance), "%", ". Bytes per client =", ByteCountIEC(int64(bytesPerClient)))
+
+			fmt.Println(stats.LastGroupID, "locks simulated. Taken time:", takenTime.String(), ". Rate =", int(rate), "groups/sec", ". Performance =", fmt.Sprintf("%.2f", performance), "%", ". Bytes per client =", ByteCountIEC(int64(bytesPerClient)))
+			fmt.Printf("%+v\n", stats)
+			pprof.Lookup("heap").WriteTo(fm, 1)
 
 			lastTime = now
+			lastCount = stats.LastGroupID
 		}
+
+		needPrintStats = false
 	}
+
+	ls.Stop()
+
+	fmt.Printf("%+v\n", ls.Statistics())
+	fmt.Println("end")
 }
 
-func simulateClient(ch chan int, ls *lockSpace.LockSpace) {
+func simulateClient(ch chan struct{}, ls *lockSpace.LockSpace) {
 	for i := range ch {
 		resources := getRandomResourceLockGroup()
 		duration := getRandomDuration()
 
-		// fmt.Println("Simulation lock for resources:", resources, "for", duration, "id:", i)
-
 		simulateLock(resources, ls, duration)
 
 		_ = i
-		// fmt.Println("Simulation completed (id =", i, ")")
 	}
 }
 
 func getRandomDuration() time.Duration {
-	return time.Duration(rand.Intn(maxLockDurationMs)) * time.Millisecond * 0
+	return time.Duration(rand.Intn(maxLockDurationMs)) * time.Millisecond
 }
 
 func simulateLock(resources []lockSpace.ResourceLock, ls *lockSpace.LockSpace, duration time.Duration) {
@@ -95,7 +161,7 @@ func getRandomResourcePath() []string {
 	result := make([]string, 0)
 
 	for i := 0; i < maxTreeDepth; i++ {
-		if rand.Intn(fullRangeLockPeriod) == 0 {
+		if fullRangeLockPeriod != 0 && rand.Intn(fullRangeLockPeriod) == 0 {
 			return result
 		}
 

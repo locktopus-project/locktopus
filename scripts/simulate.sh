@@ -1,1 +1,2 @@
-go build -o ./bin/simulate cmd/simulation/simulation.go && ./bin/simulate
+mkdir -p pprof
+go build -o ./bin/simulation cmd/simulation/simulation.go && ./bin/simulation -cpuprofile "pprof/prof"
