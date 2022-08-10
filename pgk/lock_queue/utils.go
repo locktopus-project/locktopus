@@ -9,29 +9,13 @@ import (
 
 type tokenRef uintptr
 
-const uintptrSize = unsafe.Sizeof(uintptr(0))
-
-func uintptrToBytes(v tokenRef) []byte {
-	b := make([]byte, uintptrSize)
-
-	// switch uintptrSize {
-	// case 4:
-	// 	binary.LittleEndian.PutUint32(b, uint32(v))
-	// case 8:
-	binary.LittleEndian.PutUint64(b, uint64(v))
-	// default:
-	// 	panic(fmt.Sprintf("unknown uintptr size: %v", uintptrSize))
-	// }
-
-	return b
-}
+const uintptrSize = int(unsafe.Sizeof(uintptr(0)))
 
 func concatSegmentRefs(pointers []tokenRef) string {
-	concatSlice := make([]byte, 0)
+	concatSlice := make([]byte, len(pointers)*uintptrSize)
 
-	for _, p := range pointers {
-		bs := uintptrToBytes(p)
-		concatSlice = append(concatSlice, bs...)
+	for i, p := range pointers {
+		binary.PutVarint(concatSlice[i*uintptrSize:], int64(p))
 	}
 
 	return string(concatSlice)
