@@ -350,13 +350,16 @@ func (ls *LockSpace) cleanRefStacks() {
 
 		segmentGroupList = append(segmentGroupList, segmentGroup)
 
-		for !opened {
+	remainingGarbage:
+		for {
 			select {
 			case segmentGroup, opened = <-ls.garbage:
-				if opened {
-					segmentGroupList = append(segmentGroupList, segmentGroup)
+				if !opened {
+					break remainingGarbage
 				}
+				segmentGroupList = append(segmentGroupList, segmentGroup)
 			default:
+				break remainingGarbage
 			}
 		}
 
