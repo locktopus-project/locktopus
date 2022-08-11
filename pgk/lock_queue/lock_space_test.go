@@ -1,7 +1,6 @@
 package lockqueue
 
 import (
-	"fmt"
 	"reflect"
 	"sync"
 	"testing"
@@ -460,7 +459,6 @@ func TestLockSpace_Complex_2(t *testing.T) {
 		order.Append(3)
 		u.Unlock()
 
-		fmt.Println(order)
 		wg.Done()
 	}()
 
@@ -469,7 +467,6 @@ func TestLockSpace_Complex_2(t *testing.T) {
 		order.Append(3)
 		u.Unlock()
 
-		fmt.Println(order)
 		wg.Done()
 	}()
 
@@ -478,7 +475,6 @@ func TestLockSpace_Complex_2(t *testing.T) {
 		order.Append(3)
 		u.Unlock()
 
-		fmt.Println(order)
 		wg.Done()
 	}()
 
@@ -487,7 +483,6 @@ func TestLockSpace_Complex_2(t *testing.T) {
 		order.Append(3)
 		u.Unlock()
 
-		fmt.Println(order)
 		wg.Done()
 	}()
 
