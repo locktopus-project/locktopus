@@ -23,6 +23,7 @@ const concurrency = 2000
 const maxLockDurationMs = 50
 
 const statsPeriodSec = 1
+const endAfterSec = 10
 
 var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
 
@@ -32,6 +33,8 @@ func init() {
 
 func main() {
 	var fm *os.File
+	startTime := time.Now()
+	end := time.After(time.Second * endAfterSec)
 
 	if *cpuprofile != "" {
 		f, err := os.Create(*cpuprofile)
@@ -90,6 +93,8 @@ func main() {
 		ch <- struct{}{}
 
 		select {
+		case <-end:
+			keepRunning = false
 		case <-printStatsAfter:
 			needPrintStats = true
 			printStatsAfter = time.After(time.Duration(statsPeriodSec) * time.Second)
@@ -116,15 +121,18 @@ func main() {
 
 			lastTime = now
 			lastCount = stats.LastGroupID
+
+			needPrintStats = false
 		}
 
-		needPrintStats = false
 	}
 
 	ls.Close()
 
-	fmt.Printf("%+v\n", ls.Statistics())
-	fmt.Println("end")
+	stats := ls.Statistics()
+	fmt.Printf("%+v\n", stats)
+
+	fmt.Println("Total average rate =", int(float64(stats.LastGroupID)/float64(time.Since(startTime).Seconds())), "groups/sec")
 }
 
 func simulateClient(ch chan struct{}, ls *lockSpace.LockSpace) {
