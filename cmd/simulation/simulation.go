@@ -19,8 +19,8 @@ const branchingFactor = 100
 const maxTreeDepth = 5
 const fullRangeLockPeriod = 1000
 const maxGroupSize = 5
-const concurrency = 2000
-const maxLockDurationMs = 50
+const concurrency = 10000
+const lockDurationMs = 100
 
 const statsPeriodSec = 1
 
@@ -50,7 +50,7 @@ func main() {
 
 	ch := make(chan struct{})
 
-	var expectedRate = float64(float64(concurrency) / float64(maxLockDurationMs) * 1000 * 2)
+	var expectedRate = float64(float64(concurrency) / float64(lockDurationMs) * 1000)
 
 	ls := lockSpace.NewLockSpace()
 
@@ -86,8 +86,10 @@ func main() {
 		fmt.Println("Received signal:", sig)
 	}()
 
+	i := 0
 	for keepRunning {
 		ch <- struct{}{}
+		i++
 
 		select {
 		case <-printStatsAfter:
@@ -106,16 +108,18 @@ func main() {
 
 			bytesPerClient := int((memStats.Sys - initialMemUsage) / uint64(concurrency))
 			takenTime := now.Sub(lastTime)
-			count := stats.LastGroupID - lastCount
+			totalIterations := int64(i)
+			// totalIterations := stats.LastGroupID
+			count := totalIterations - lastCount
 			rate := float64(count) / takenTime.Seconds()
 			performance := rate / expectedRate * 100
 
-			fmt.Println(stats.LastGroupID, "locks simulated. Taken time:", takenTime.String(), ". Rate =", int(rate), "groups/sec", ". Performance =", fmt.Sprintf("%.2f", performance), "%", ". Bytes per client =", ByteCountIEC(int64(bytesPerClient)))
+			fmt.Println(totalIterations, "locks simulated. Taken time:", takenTime.String(), ". Rate =", int(rate), "groups/sec", ". Performance =", fmt.Sprintf("%.2f", performance), "%", ". Bytes per client =", ByteCountIEC(int64(bytesPerClient)))
 			fmt.Printf("%+v\n", stats)
 			pprof.Lookup("heap").WriteTo(fm, 1)
 
 			lastTime = now
-			lastCount = stats.LastGroupID
+			lastCount = totalIterations
 		}
 
 		needPrintStats = false
@@ -139,7 +143,7 @@ func simulateClient(ch chan struct{}, ls *lockSpace.LockSpace) {
 }
 
 func getRandomDuration() time.Duration {
-	return time.Duration(rand.Intn(maxLockDurationMs)) * time.Millisecond
+	return time.Duration(lockDurationMs * time.Millisecond)
 }
 
 func simulateLock(resources []lockSpace.ResourceLock, ls *lockSpace.LockSpace, duration time.Duration) {
