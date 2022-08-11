@@ -11,14 +11,16 @@ type tokenRef uintptr
 
 const uintptrSize = int(unsafe.Sizeof(uintptr(0)))
 
-func concatSegmentRefs(pointers []tokenRef) string {
-	concatSlice := make([]byte, len(pointers)*uintptrSize)
+func newTokenBuffer(tokenSize int) []byte {
+	return make([]byte, tokenSize*uintptrSize)
+}
 
+func concatTokenRefs(pointers []tokenRef, concatSlice []byte) string {
 	for i, p := range pointers {
 		binary.PutVarint(concatSlice[i*uintptrSize:], int64(p))
 	}
 
-	return string(concatSlice)
+	return string(concatSlice[0 : len(pointers)*uintptrSize])
 }
 
 func truncateAfterPrefixes(input []string) []string {

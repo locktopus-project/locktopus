@@ -16,6 +16,7 @@ const LockTypeRead LockType = dagLock.LockTypeRead
 const LockTypeWrite LockType = dagLock.LockTypeWrite
 
 const garbageBufferSize = 100
+const tokenBufferInitialSize = 10
 
 type ResourceLock struct {
 	LockType LockType
@@ -171,13 +172,19 @@ func (ls *LockSpace) lockResources(lockGroup []ResourceLock, u Unlocker) Locker 
 
 	groupVertexes := set.NewSet[*dagLock.Vertex]()
 
+	buffer := newTokenBuffer(tokenBufferInitialSize)
+
 	for i, tokenRefs := range tokenRefGroup {
 		lockType := lockGroup[i].LockType
 		vertex := dagLock.NewVertex(lockType)
 		vAdded := false
 
+		if len(tokenRefs) > len(buffer) {
+			buffer = newTokenBuffer(len(tokenRefs) * 2)
+		}
+
 		for i := range tokenRefs {
-			path := concatSegmentRefs(tokenRefs[:i+1])
+			path := concatTokenRefs(tokenRefs[:i+1], buffer)
 
 			refType := tail
 			if i == len(tokenRefs)-1 {
@@ -318,10 +325,10 @@ func (ls *LockSpace) lockResources(lockGroup []ResourceLock, u Unlocker) Locker 
 	return lockWaiter
 }
 
-func (ls *LockSpace) storeTokens(segments []string) []tokenRef {
-	refs := make([]tokenRef, len(segments))
+func (ls *LockSpace) storeTokens(tokens []string) []tokenRef {
+	refs := make([]tokenRef, len(tokens))
 
-	for i, s := range segments {
+	for i, s := range tokens {
 		p := ls.segmentTokens.Store(s)
 
 		refs[i] = tokenRef(unsafe.Pointer(p))
@@ -330,8 +337,8 @@ func (ls *LockSpace) storeTokens(segments []string) []tokenRef {
 	return refs
 }
 
-func (ls *LockSpace) releaseTokens(segments []string) {
-	for _, s := range segments {
+func (ls *LockSpace) releaseTokens(tokens []string) {
+	for _, s := range tokens {
 		ls.segmentTokens.Release(s)
 	}
 }
@@ -340,7 +347,7 @@ func (ls *LockSpace) cleanRefStacks() {
 	opened := true
 
 	for opened {
-		segmentGroupList := make([][][]tokenRef, 0, 1)
+		tokenGroupList := make([][][]tokenRef, 0, 1)
 		var segmentGroup [][]tokenRef
 
 		segmentGroup, opened = <-ls.garbage
@@ -348,7 +355,7 @@ func (ls *LockSpace) cleanRefStacks() {
 			break
 		}
 
-		segmentGroupList = append(segmentGroupList, segmentGroup)
+		tokenGroupList = append(tokenGroupList, segmentGroup)
 
 	remainingGarbage:
 		for {
@@ -357,7 +364,7 @@ func (ls *LockSpace) cleanRefStacks() {
 				if !opened {
 					break remainingGarbage
 				}
-				segmentGroupList = append(segmentGroupList, segmentGroup)
+				tokenGroupList = append(tokenGroupList, segmentGroup)
 			default:
 				break remainingGarbage
 			}
@@ -365,10 +372,16 @@ func (ls *LockSpace) cleanRefStacks() {
 
 		paths := make(set.Set[string])
 
-		for _, segmentGroup := range segmentGroupList {
-			for _, segmentRefs := range segmentGroup {
-				for i := range segmentRefs {
-					paths.Add(concatSegmentRefs(segmentRefs[:i+1]))
+		buffer := newTokenBuffer(tokenBufferInitialSize)
+
+		for _, tokenGroup := range tokenGroupList {
+			for _, tokenRefs := range tokenGroup {
+				if len(tokenRefs) > len(buffer) {
+					buffer = newTokenBuffer(len(tokenRefs) * 2)
+				}
+
+				for i := range tokenRefs {
+					paths.Add(concatTokenRefs(tokenRefs[:i+1], buffer))
 				}
 			}
 		}
@@ -383,8 +396,8 @@ func (ls *LockSpace) cleanRefStacks() {
 
 			keepFrom := 0
 
-			for i, segmentRef := range refStack {
-				if !segmentRef.v.Useless() {
+			for i, tokenRef := range refStack {
+				if !tokenRef.v.Useless() {
 					break
 				}
 
