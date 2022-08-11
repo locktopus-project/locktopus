@@ -58,25 +58,3 @@ func TestSet_Clear(t *testing.T) {
 		t.Error("Set should not have 0")
 	}
 }
-
-func TestSet_AddOnce(t *testing.T) {
-	s := make(Set[int])
-
-	added := false
-
-	s.AddOnce(0, &added)
-
-	if !added {
-		t.Error("added should be true")
-	}
-
-	if !s.Has(0) {
-		t.Error("Set should have 0")
-	}
-
-	s.AddOnce(0, &added)
-
-	if !added {
-		t.Error("added should be true")
-	}
-}

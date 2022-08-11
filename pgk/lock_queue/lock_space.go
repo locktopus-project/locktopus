@@ -194,7 +194,11 @@ func (ls *LockSpace) lockResources(lockGroup []ResourceLock, u Unlocker) Locker 
 			refStack, ok := ls.lockSurface[path]
 
 			if !ok {
-				groupVertexes.AddOnce(vertex, &vAdded)
+				if !vAdded {
+					groupVertexes.Add(vertex)
+					vAdded = true
+				}
+
 				ls.lockSurface[path] = []lockRef{{t: refType, v: vertex}}
 
 				atomic.AddInt64(&ls.statistics.lockrefCount, 1)
@@ -233,7 +237,10 @@ func (ls *LockSpace) lockResources(lockGroup []ResourceLock, u Unlocker) Locker 
 				}
 
 				// Substitute all refs with the new head
-				groupVertexes.AddOnce(vertex, &vAdded)
+				if !vAdded {
+					groupVertexes.Add(vertex)
+					vAdded = true
+				}
 				ls.lockSurface[path] = []lockRef{{t: refType, v: vertex}}
 
 				atomic.AddInt64(&ls.statistics.lockrefCount, int64(1-len(refStack)))
@@ -264,7 +271,10 @@ func (ls *LockSpace) lockResources(lockGroup []ResourceLock, u Unlocker) Locker 
 			}
 
 			// Leave a tail in the stack.
-			groupVertexes.AddOnce(vertex, &vAdded)
+			if !vAdded {
+				groupVertexes.Add(vertex)
+				vAdded = true
+			}
 			ls.lockSurface[path] = append(refStack, lockRef{t: refType, v: vertex})
 
 			atomic.AddInt64(&ls.statistics.lockrefCount, 1)
@@ -275,8 +285,6 @@ func (ls *LockSpace) lockResources(lockGroup []ResourceLock, u Unlocker) Locker 
 
 	vertexes := groupVertexes.GetAll()
 
-	vertexCount := len(vertexes)
-
 	go ls.handleUnlocker(u, vertexes, lockGroup, tokenRefGroup)
 
 	lockWaiter := Locker{
@@ -285,7 +293,7 @@ func (ls *LockSpace) lockResources(lockGroup []ResourceLock, u Unlocker) Locker 
 		id: lockID,
 	}
 
-	atomic.AddInt64(&ls.statistics.pendingVertexCount, int64(vertexCount))
+	atomic.AddInt64(&ls.statistics.pendingVertexCount, int64(len(vertexes)))
 
 	for i, v := range vertexes {
 		vertexLock := v.LockChan()
