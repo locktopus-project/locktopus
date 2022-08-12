@@ -1,4 +1,4 @@
-package lockqueue
+package multilocker
 
 import (
 	"reflect"
@@ -9,7 +9,7 @@ import (
 	sliceAppender "github.com/xshkut/distributed-lock/pgk/slice_appender"
 )
 
-func assertWaiterIsWaiting(t *testing.T, lw Locker) {
+func assertWaiterIsWaiting(t *testing.T, lw Lock) {
 	select {
 	case <-lw.ch:
 		t.Error("Waiter should still wait")
@@ -17,7 +17,7 @@ func assertWaiterIsWaiting(t *testing.T, lw Locker) {
 	}
 }
 
-func assertWaiterWontWait(t *testing.T, lw Locker) {
+func assertWaiterWontWait(t *testing.T, lw Lock) {
 	select {
 	case <-lw.ch:
 	default:

@@ -1,4 +1,4 @@
-package lockqueue
+package multilocker
 
 import (
 	"reflect"

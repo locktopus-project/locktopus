@@ -13,7 +13,7 @@ import (
 	"syscall"
 	"time"
 
-	lockSpace "github.com/xshkut/distributed-lock/pgk/lock_queue"
+	ml "github.com/xshkut/distributed-lock/pgk/multilocker"
 )
 
 const branchingFactor = 1000
@@ -54,7 +54,7 @@ func main() {
 
 	var expectedRate = float64(float64(concurrency) / math.Max(1, float64(maxLockDurationMs)*1000*2))
 
-	ls := lockSpace.NewLockSpace()
+	ls := ml.NewLockSpace()
 
 	for i := 0; i < concurrency; i++ {
 		go simulateClient(ch, ls)
@@ -140,7 +140,7 @@ func main() {
 
 }
 
-func simulateClient(ch chan struct{}, ls *lockSpace.LockSpace) {
+func simulateClient(ch chan struct{}, ls *ml.LockSpace) {
 	for i := range ch {
 		resources := getRandomResourceLockGroup()
 		duration := getRandomDuration()
@@ -155,7 +155,7 @@ func getRandomDuration() time.Duration {
 	return time.Duration(maxLockDurationMs) * time.Millisecond
 }
 
-func simulateLock(resources []lockSpace.ResourceLock, ls *lockSpace.LockSpace, duration time.Duration) {
+func simulateLock(resources []ml.ResourceLock, ls *ml.LockSpace, duration time.Duration) {
 	lock := ls.Lock(resources)
 	u := lock.Acquire()
 
@@ -189,18 +189,18 @@ func getRandomResourceLength() int {
 	return rand.Intn(maxGroupSize) + 1
 }
 
-func getRandomLockType() lockSpace.LockType {
-	return lockSpace.LockType(rand.Intn(2))
+func getRandomLockType() ml.LockType {
+	return ml.LockType(rand.Intn(2))
 }
 
-func getRandomResourceLockGroup() []lockSpace.ResourceLock {
-	result := make([]lockSpace.ResourceLock, 0)
+func getRandomResourceLockGroup() []ml.ResourceLock {
+	result := make([]ml.ResourceLock, 0)
 
 	for i := 0; i < getRandomResourceLength(); i++ {
 		path := getRandomResourcePath()
 		lockType := getRandomLockType()
 
-		result = append(result, lockSpace.NewResourceLock(lockType, path))
+		result = append(result, ml.NewResourceLock(lockType, path))
 	}
 
 	return result

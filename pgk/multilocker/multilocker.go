@@ -1,4 +1,4 @@
-package lockqueue
+package multilocker
 
 import (
 	"sync"
@@ -134,7 +134,7 @@ func (ls *LockSpace) Statistics() Statistics {
 // You may pass you own unlocker as the second argument (unlock) and use it to unlock the group.
 // The returned value can be used to receive the reference to the second argument (unlock) if provided.
 // If unlock is not provided, it is made internally. This is the preferred way to ensure you won't unlock the group before it acquires the lock.
-func (ls *LockSpace) Lock(resourceLocks []ResourceLock, unlocker ...Unlocker) Locker {
+func (ls *LockSpace) Lock(resourceLocks []ResourceLock, unlocker ...Unlocker) Lock {
 	ls.activeLockers.Add(1)
 
 	if atomic.LoadInt32(&ls.closed) > 0 {
@@ -156,7 +156,7 @@ func (ls *LockSpace) Lock(resourceLocks []ResourceLock, unlocker ...Unlocker) Lo
 	return locker
 }
 
-func (ls *LockSpace) lockResources(lockGroup []ResourceLock, u Unlocker) Locker {
+func (ls *LockSpace) lockResources(lockGroup []ResourceLock, u Unlocker) Lock {
 	ls.mx.Lock()
 
 	ls.lastLockID++
@@ -287,7 +287,7 @@ func (ls *LockSpace) lockResources(lockGroup []ResourceLock, u Unlocker) Locker 
 
 	go ls.handleUnlocker(u, vertexes, lockGroup, tokenRefGroup)
 
-	lockWaiter := Locker{
+	lockWaiter := Lock{
 		u:  u,
 		ch: make(chan Unlocker, 1),
 		id: lockID,
