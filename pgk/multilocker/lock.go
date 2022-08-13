@@ -1,7 +1,7 @@
 package multilocker
 
 type Lock struct {
-	ch chan Unlocker
+	ch chan struct{}
 	u  Unlocker
 	id int64
 }
@@ -17,7 +17,8 @@ func (l Lock) Acquire() Unlocker {
 	return l.u
 }
 
-func (l Lock) AcquireChan() <-chan Unlocker {
+// Ready returns chan that signals when l is ready to be acquired.
+func (l Lock) Ready() <-chan struct{} {
 	return l.ch
 }
 
@@ -26,9 +27,9 @@ func (l Lock) ID() int64 {
 	return l.id
 }
 
-func (l Lock) makeReady(u Unlocker) {
+func (l *Lock) makeReady(u Unlocker) {
 	l.u = u
-	l.ch <- l.u
+	l.ch <- struct{}{}
 	close(l.ch)
 }
 

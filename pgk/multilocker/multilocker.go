@@ -287,9 +287,9 @@ func (ls *LockSpace) lockResources(lockGroup []ResourceLock, u Unlocker) Lock {
 
 	go ls.handleUnlocker(u, vertexes, lockGroup, tokenRefGroup)
 
-	lockWaiter := Lock{
+	l := Lock{
 		u:  u,
-		ch: make(chan Unlocker, 1),
+		ch: make(chan struct{}, 1),
 		id: lockID,
 	}
 
@@ -318,19 +318,19 @@ func (ls *LockSpace) lockResources(lockGroup []ResourceLock, u Unlocker) Lock {
 				atomic.AddInt64(&ls.statistics.groupsPending, -1)
 				atomic.AddInt64(&ls.statistics.groupsAcquired, 1)
 
-				lockWaiter.makeReady(u)
+				l.makeReady(u)
 			}()
 
-			return lockWaiter
+			return l
 		}
 	}
 
-	lockWaiter.makeReady(u)
+	l.makeReady(u)
 
 	atomic.AddInt64(&ls.statistics.groupsPending, -1)
 	atomic.AddInt64(&ls.statistics.groupsAcquired, 1)
 
-	return lockWaiter
+	return l
 }
 
 func (ls *LockSpace) storeTokens(tokens []string) []tokenRef {
