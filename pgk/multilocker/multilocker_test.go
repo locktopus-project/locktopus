@@ -828,9 +828,9 @@ func TestLock_MultipleAcquires(t *testing.T) {
 	ls := ml.NewLockSpace()
 
 	l := ls.Lock([]ml.ResourceLock{ml.NewResourceLock(ml.LockTypeWrite, []string{"a"})})
-	lr1 := ls.Lock([]ml.ResourceLock{ml.NewResourceLock(ml.LockTypeWrite, []string{"a"})})
+	l1 := ls.Lock([]ml.ResourceLock{ml.NewResourceLock(ml.LockTypeWrite, []string{"a"})})
 
-	assertLockIsWaiting(t, lr1)
+	assertLockIsWaiting(t, l1)
 
 	l.Acquire()
 	l.Acquire()
@@ -838,5 +838,30 @@ func TestLock_MultipleAcquires(t *testing.T) {
 
 	u.Unlock()
 
-	lr1.Acquire()
+	l1.Acquire()
+}
+
+func TestReady_NoLockers(t *testing.T) {
+	ls := ml.NewLockSpace()
+
+	l := ls.Lock([]ml.ResourceLock{ml.NewResourceLock(ml.LockTypeWrite, []string{"a"})})
+
+	<-l.Ready()
+}
+
+func TestReady_WithLockers(t *testing.T) {
+	ls := ml.NewLockSpace()
+
+	l := ls.Lock([]ml.ResourceLock{ml.NewResourceLock(ml.LockTypeWrite, []string{"a"})})
+	l1 := ls.Lock([]ml.ResourceLock{ml.NewResourceLock(ml.LockTypeWrite, []string{"a"})})
+
+	select {
+	case <-l1.Ready():
+		t.Errorf("Expected l1 not be ready")
+	default:
+	}
+
+	l.Acquire().Unlock()
+
+	<-l1.Ready()
 }

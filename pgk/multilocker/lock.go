@@ -8,7 +8,7 @@ type Lock struct {
 
 // Acquire returns when the lock is acquired.
 // You may think of it as the casual method Lock from sync.Mutex.
-// The reason why the name differs is that the lock actually starts its lifecycle within LockGroup() call.
+// The reason why the name differs is that the lock actually starts its lifecycle within LockSpace.Lock() call.
 // Use the returned value to unlock the group.
 // It is possible to call Acquire() multiple times.
 func (l Lock) Acquire() Unlocker {
@@ -18,11 +18,12 @@ func (l Lock) Acquire() Unlocker {
 }
 
 // Ready returns chan that signals when l is ready to be acquired.
+// It is safe to call Ready() multiple times.
 func (l Lock) Ready() <-chan struct{} {
 	return l.ch
 }
 
-// ID returns unique incremental ID of the group within the LockSpace
+// ID returns unique incremental ID of the group within the LockSpace instance
 func (l Lock) ID() int64 {
 	return l.id
 }
@@ -43,10 +44,11 @@ func NewUnlocker() Unlocker {
 	}
 }
 
-// Unlock unlocks to group. After returns after the descendent Locker is ready to be acquired
+// Unlock unlocks to Lock and returns after it is completely unlocked, though the descendent Lock is no guaranteed to be ready at that time.
+// Do not call Unlock() multiple times.
 func (u Unlocker) Unlock() {
-	ch := make(chan struct{})
-	u.ch <- ch
-	<-ch
+	unlockProcessed := make(chan struct{})
+	u.ch <- unlockProcessed
+	<-unlockProcessed
 	close(u.ch)
 }

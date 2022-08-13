@@ -433,7 +433,7 @@ func (ls *LockSpace) cleanRefStacks() {
 }
 
 func (ls *LockSpace) handleUnlocker(u Unlocker, vertexes []*dagLock.Vertex, resourceLocks []ResourceLock, tokenRefGroup [][]tokenRef) {
-	ch := <-u.ch
+	unlockProcessed := <-u.ch
 
 	ls.mx.Lock()
 
@@ -450,7 +450,7 @@ func (ls *LockSpace) handleUnlocker(u Unlocker, vertexes []*dagLock.Vertex, reso
 	atomic.AddInt64(&ls.statistics.acquiredVertexCount, -int64(len(vertexes)))
 	atomic.AddInt64(&ls.statistics.groupsAcquired, -1)
 
-	close(ch)
+	close(unlockProcessed)
 
 	for _, l := range resourceLocks {
 		ls.releaseTokens(l.Path)
