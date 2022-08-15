@@ -26,7 +26,7 @@ func (s Set[comparable]) Clear() {
 }
 
 func (s Set[comparable]) GetAll() []comparable {
-	var keys []comparable
+	keys := make([]comparable, 0, 1)
 
 	for k := range s {
 		keys = append(keys, k)
