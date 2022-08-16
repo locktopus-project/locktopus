@@ -1,3 +1,11 @@
-bin/simulation
-cmd/sandbox/sandbox.go
+# binaries
+bin/
+
+# pprof artifacts
 pprof/
+
+# debug sessions
+cmd/server/__debug_bin
+
+# ide stuff
+.vscode/
