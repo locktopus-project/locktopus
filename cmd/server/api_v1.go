@@ -92,7 +92,6 @@ func (cs ClientState) String() string {
 }
 
 func handleCommunication(conn *websocket.Conn, ls *ml.LockSpace) (err error) {
-	var u *ml.Unlocker
 	var l *ml.Lock
 	state := clientStateReady
 	ch := make(chan requestMessage)
@@ -152,9 +151,7 @@ func handleCommunication(conn *websocket.Conn, ls *ml.LockSpace) (err error) {
 				break
 			}
 
-			unlock := ml.NewUnlocker()
-			u = &unlock
-			newLock := ls.Lock(resourceLocks, *u)
+			newLock := ls.Lock(resourceLocks)
 			l = &newLock
 
 			select {
@@ -174,8 +171,7 @@ func handleCommunication(conn *websocket.Conn, ls *ml.LockSpace) (err error) {
 
 		// actionRelease
 
-		go u.Unlock()
-		u = nil
+		go l.Acquire().Unlock()
 
 		state = clientStateReady
 
@@ -186,8 +182,8 @@ func handleCommunication(conn *websocket.Conn, ls *ml.LockSpace) (err error) {
 
 	}
 
-	if u != nil {
-		u.Unlock()
+	if l != nil {
+		l.Acquire().Unlock()
 	}
 
 	if readErr != nil {
