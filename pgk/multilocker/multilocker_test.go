@@ -865,3 +865,14 @@ func TestReady_WithLockers(t *testing.T) {
 
 	<-l1.Ready()
 }
+
+func TestLock_PrefixAfterGroupWithFirstRead(t *testing.T) {
+	ls := ml.NewLockSpace()
+
+	l := ls.Lock([]ml.ResourceLock{ml.NewResourceLock(ml.LockTypeRead, []string{}), ml.NewResourceLock(ml.LockTypeWrite, []string{"c"})})
+	l1 := ls.Lock([]ml.ResourceLock{ml.NewResourceLock(ml.LockTypeRead, []string{})})
+
+	l.Acquire()
+
+	assertLockIsWaiting(t, l1)
+}
