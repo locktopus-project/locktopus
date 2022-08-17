@@ -4,7 +4,6 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"math"
 	"math/rand"
 	"os"
 	"os/signal"
@@ -16,15 +15,15 @@ import (
 	ml "github.com/xshkut/distributed-lock/pgk/multilocker"
 )
 
-const branchingFactor = 1000
+const branchingFactor = 5
 const maxTreeDepth = 5
 const fullRangeLockPeriod = 1000
 const maxGroupSize = 5
-const concurrency = 2000
-const maxLockDurationMs = 0
+const concurrency = 1000
+const maxLockDurationMs = 1
 
-const statsPeriodSec = 1
-const endAfterSec = 10
+const statsPeriodSec = 60
+const endAfterSec = 301
 
 var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
 
@@ -50,18 +49,17 @@ func main() {
 		defer pprof.StopCPUProfile()
 	}
 
-	ch := make(chan struct{})
-
-	var expectedRate = float64(float64(concurrency) / math.Max(1, float64(maxLockDurationMs)*1000*2))
+	ch := make(chan struct{}, 1000)
 
 	ls := ml.NewLockSpace()
 
 	for i := 0; i < concurrency; i++ {
-		go simulateClient(ch, ls)
+		go func() {
+			simulateClient(ch)
+		}()
 	}
 
 	fmt.Println("GOMAXPROCS:", runtime.GOMAXPROCS(0))
-	fmt.Println("Expected rate:", int(expectedRate), "per second")
 
 	time.Sleep(time.Duration(1) * time.Second)
 
@@ -115,9 +113,8 @@ func main() {
 			takenTime := now.Sub(lastTime)
 			count := stats.LastGroupID - lastCount
 			rate := float64(count) / takenTime.Seconds()
-			performance := rate / expectedRate * 100
 
-			fmt.Println(stats.LastGroupID, "locks simulated. Taken time:", takenTime.String(), ". Rate =", int(rate), "groups/sec", ". Performance =", fmt.Sprintf("%.2f", performance), "%", ". Bytes per client =", ByteCountIEC(int64(bytesPerClient)))
+			fmt.Println(stats.LastGroupID, "locks simulated. Taken time:", takenTime.String(), ". Rate =", int(rate), "groups/sec", ". Bytes per client =", ByteCountIEC(int64(bytesPerClient)))
 			fmt.Printf("%+v\n", stats)
 			pprof.Lookup("heap").WriteTo(fm, 1)
 
@@ -140,30 +137,97 @@ func main() {
 
 }
 
-func simulateClient(ch chan struct{}, ls *ml.LockSpace) {
-	for i := range ch {
-		resources := getRandomResourceLockGroup()
-		duration := getRandomDuration()
+func simulateClient(ch chan struct{}) {
+	for range ch {
+		resources1 := getRandomResourceLockGroup()
+		resources2 := getRandomResourceLockGroup()
 
-		simulateLock(resources, ls, duration)
+		ls := ml.NewLockSpace()
+		m := NewResourceMap()
+		unlocker := make(chan struct{})
 
-		_ = i
+		go lockAndCheckCollision(resources1, ls, m, unlocker)
+		go lockAndCheckCollision(resources2, ls, m, unlocker)
+
+		if maxLockDurationMs > 0 {
+			time.Sleep(time.Duration(maxLockDurationMs) * time.Millisecond)
+		}
+
+		unlocker <- struct{}{}
+		unlocker <- struct{}{}
+		ls.Close()
+
+		ls = ml.NewLockSpace()
+		m = NewResourceMap()
+		unlocker = make(chan struct{})
+
+		go lockAndCheckCollision(resources2, ls, m, unlocker)
+		go lockAndCheckCollision(resources1, ls, m, unlocker)
+
+		if maxLockDurationMs > 0 {
+			time.Sleep(time.Duration(maxLockDurationMs) * time.Millisecond)
+		}
+
+		unlocker <- struct{}{}
+		unlocker <- struct{}{}
+		ls.Close()
 	}
 }
 
-func getRandomDuration() time.Duration {
-	return time.Duration(maxLockDurationMs) * time.Millisecond
-}
+func lockAndCheckCollision(resources []ml.ResourceLock, ls *ml.LockSpace, m *ResourceMap, unlock <-chan struct{}) {
+	groupRef := new(int8)
 
-func simulateLock(resources []ml.ResourceLock, ls *ml.LockSpace, duration time.Duration) {
 	lock := ls.Lock(resources)
 	u := lock.Acquire()
+	defer func() {
+		u.Unlock()
+	}()
 
-	if duration > 0 {
-		time.Sleep(duration)
+	for _, this := range resources {
+		thisPath := this.Path
+		thisLockType := this.LockType
+
+		rr := resourceRef{
+			group:     groupRef,
+			t:         thisLockType,
+			resources: resources,
+		}
+
+		for i := range this.Path {
+			isHead := false
+			if i == len(this.Path)-1 {
+				isHead = true
+			}
+
+			path := ""
+
+			part := this.Path[0 : i+1]
+			for j, p := range part {
+				if j == len(part)-1 {
+					path += p
+					continue
+				}
+				path += p + ":"
+			}
+
+			if that, ok := m.Get(path); ok {
+				if that.group != groupRef && !(that.t == ml.LockTypeRead && thisLockType == ml.LockTypeRead) {
+					panic(fmt.Sprintln("Collision! A:", that.resources, ", B:", rr.resources, ", collision on B:", thisPath))
+				}
+
+				continue
+			}
+
+			if isHead {
+				m.Set(path, rr)
+				defer func() {
+					m.Delete(path)
+				}()
+			}
+		}
 	}
 
-	u.Unlock()
+	<-unlock
 }
 
 func getRandomResourceName(r int) string {
@@ -173,7 +237,9 @@ func getRandomResourceName(r int) string {
 func getRandomResourcePath() []string {
 	result := make([]string, 0)
 
-	for i := 0; i < maxTreeDepth; i++ {
+	l := rand.Intn(maxTreeDepth) + 1
+
+	for i := 0; i < l; i++ {
 		if fullRangeLockPeriod != 0 && rand.Intn(fullRangeLockPeriod) == 0 {
 			return result
 		}
