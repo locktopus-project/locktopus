@@ -187,12 +187,13 @@ func (ls *LockSpace) lockResources(lockGroup []ResourceLock, u Unlocker) Lock {
 			path := concatTokenRefs(tokenRefs[:i+1], buffer)
 
 			refType := tail
+			isHead := false
 			if i == len(tokenRefs)-1 {
 				refType = head
+				isHead = true
 			}
 
-			refStack, ok := ls.lockSurface[path]
-
+			existingRefs, ok := ls.lockSurface[path]
 			if !ok {
 				if !vAdded {
 					groupVertexes.Add(vertex)
@@ -206,78 +207,107 @@ func (ls *LockSpace) lockResources(lockGroup []ResourceLock, u Unlocker) Lock {
 				continue
 			}
 
-			// Do nothing if the group aready has a head in the stack so the lock is useless. A head might be only on top of the stack
-			lastRef := refStack[len(refStack)-1]
-			if lastRef.t == head && groupVertexes.Has(lastRef.v) {
-				if lockType == LockTypeRead || lastRef.v.LockType() == LockTypeWrite {
+			refInGroup := false
+			refIsHead := false
+			refIsWrite := false
+
+			replaceAll := false // TODO: optimize
+			// replaceAll := isHead
+			replaceCurrent := false
+			preventAppend := false
+			isRedundant := false
+
+			var ref lockRef
+			for i := len(existingRefs) - 1; i >= 0; i-- {
+				ref = existingRefs[i]
+
+				refIsHead = ref.t == head
+				refInGroup = groupVertexes.Has(ref.v)
+				refIsWrite = ref.v.LockType() == LockTypeWrite
+
+				if refInGroup && refIsHead && ref.v.LockType() >= lockType {
+					isRedundant = true
 					break
 				}
-			}
 
-			if refType == head {
-				vertexBound := false
-				for i := len(refStack) - 1; i >= 0; i-- {
-					// Do not bind to the locks of the group.
-					if groupVertexes.Has(refStack[i].v) {
-						continue
+				// binding
+				if !refInGroup && (refIsHead || isHead) {
+					ref.v.AddChild(vertex)
+
+					if !vAdded {
+						groupVertexes.Add(vertex)
+						vAdded = true
 					}
-
-					if refStack[i].t == head {
-						if vertexBound {
-							break
-						}
-
-						vertexBound = true
-						refStack[i].v.AddChild(vertex)
-						break
-					}
-
-					vertexBound = true
-					refStack[i].v.AddChild(vertex)
 				}
 
-				// Substitute all refs with the new head
+				if replaceAll && refInGroup && refIsWrite {
+					replaceAll = false
+				}
+
+				switch true {
+				case refInGroup && refIsHead && refIsWrite:
+					preventAppend = true
+				case refInGroup && refIsHead && !refIsWrite:
+					if isHead && lockType == LockTypeWrite {
+						replaceCurrent = true
+					}
+				case refInGroup && !refIsHead && refIsWrite:
+					if isHead && lockType == LockTypeWrite {
+						replaceCurrent = true
+					}
+					if !isHead {
+						preventAppend = true
+					}
+				case refInGroup && !refIsHead && !refIsWrite:
+					if lockType == LockTypeWrite {
+						replaceCurrent = true
+					} else if isHead {
+						replaceCurrent = true
+					}
+				case !refInGroup && refIsHead && refIsWrite:
+				case !refInGroup && refIsHead && !refIsWrite:
+				case !refInGroup && !refIsHead && refIsWrite:
+				case !refInGroup && !refIsHead && !refIsWrite:
+				default:
+					panic("this code should never be reached. Report this as a bug")
+				}
+
+				if replaceCurrent {
+					existingRefs[i] = lockRef{t: refType, v: vertex}
+					preventAppend = true
+
+					if !vAdded {
+						groupVertexes.Add(vertex)
+						vAdded = true
+					}
+				}
+
+			}
+
+			if isRedundant {
+				break
+			}
+
+			if replaceAll {
+				ls.lockSurface[path] = []lockRef{{t: refType, v: vertex}}
+				atomic.AddInt64(&ls.statistics.lockrefCount, int64(1-len(existingRefs)))
 				if !vAdded {
 					groupVertexes.Add(vertex)
 					vAdded = true
 				}
-				ls.lockSurface[path] = []lockRef{{t: refType, v: vertex}}
+				break
+			}
 
-				atomic.AddInt64(&ls.statistics.lockrefCount, int64(1-len(refStack)))
-
+			if preventAppend {
 				continue
 			}
 
-			// Check if the group has left a lockRef in the stack.
-			groupLocked := false
-			for _, ref := range refStack {
-				if groupVertexes.Has(ref.v) {
-					groupLocked = true
-					break
-				}
-			}
-
-			// If the group has left a lockRef in the stack, do nothing.
-			if groupLocked {
-				continue
-			}
-
-			// If there is a head in the stack, bind to it.
-			for i := len(refStack) - 1; i >= 0; i-- {
-				if refStack[i].t == head {
-					refStack[i].v.AddChild(vertex)
-					break
-				}
-			}
-
-			// Leave a tail in the stack.
+			atomic.AddInt64(&ls.statistics.lockrefCount, 1)
+			ls.lockSurface[path] = append(existingRefs, lockRef{t: refType, v: vertex})
 			if !vAdded {
 				groupVertexes.Add(vertex)
 				vAdded = true
 			}
-			ls.lockSurface[path] = append(refStack, lockRef{t: refType, v: vertex})
-
-			atomic.AddInt64(&ls.statistics.lockrefCount, 1)
 		}
 	}
 
