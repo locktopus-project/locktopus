@@ -211,8 +211,7 @@ func (ls *LockSpace) lockResources(lockGroup []ResourceLock, u Unlocker) Lock {
 			refIsHead := false
 			refIsWrite := false
 
-			replaceAll := false // TODO: optimize
-			// replaceAll := isHead
+			replaceAll := isHead
 			replaceCurrent := false
 			preventAppend := false
 			isRedundant := false
@@ -240,36 +239,32 @@ func (ls *LockSpace) lockResources(lockGroup []ResourceLock, u Unlocker) Lock {
 					}
 				}
 
-				if replaceAll && refInGroup && refIsWrite {
+				if replaceAll && !refInGroup {
 					replaceAll = false
 				}
 
-				switch true {
-				case refInGroup && refIsHead && refIsWrite:
-					preventAppend = true
-				case refInGroup && refIsHead && !refIsWrite:
-					if isHead && lockType == LockTypeWrite {
-						replaceCurrent = true
-					}
-				case refInGroup && !refIsHead && refIsWrite:
-					if isHead && lockType == LockTypeWrite {
-						replaceCurrent = true
-					}
-					if !isHead {
+				if refInGroup {
+					switch true {
+					case refIsHead && refIsWrite:
 						preventAppend = true
+					case refIsHead && !refIsWrite:
+						if isHead && lockType == LockTypeWrite {
+							replaceCurrent = true
+						}
+					case !refIsHead && refIsWrite:
+						if isHead && lockType == LockTypeWrite {
+							replaceCurrent = true
+						}
+						if !isHead {
+							preventAppend = true
+						}
+					case !refIsHead && !refIsWrite:
+						if lockType == LockTypeWrite {
+							replaceCurrent = true
+						} else if isHead {
+							replaceCurrent = true
+						}
 					}
-				case refInGroup && !refIsHead && !refIsWrite:
-					if lockType == LockTypeWrite {
-						replaceCurrent = true
-					} else if isHead {
-						replaceCurrent = true
-					}
-				case !refInGroup && refIsHead && refIsWrite:
-				case !refInGroup && refIsHead && !refIsWrite:
-				case !refInGroup && !refIsHead && refIsWrite:
-				case !refInGroup && !refIsHead && !refIsWrite:
-				default:
-					panic("this code should never be reached. Report this as a bug")
 				}
 
 				if replaceCurrent {
