@@ -61,6 +61,18 @@ func TestLockSpace_DuplicateRecordsShouldNotBringDeadlock(t *testing.T) {
 	ls.Lock([]ml.ResourceLock{lr1, lr2})
 }
 
+func TestLockSpace_EmptyPathShouldBlock(t *testing.T) {
+	ls := ml.NewLockSpace()
+
+	lr1 := ml.NewResourceLock(ml.LockTypeWrite, []string{})
+	ls.Lock([]ml.ResourceLock{lr1})
+
+	lr2 := ml.NewResourceLock(ml.LockTypeWrite, []string{})
+
+	w := ls.Lock([]ml.ResourceLock{lr2})
+	assertLockIsWaiting(t, w)
+}
+
 func TestLockSpace_ConcurrentGroupShouldBlock(t *testing.T) {
 	ls := ml.NewLockSpace()
 
@@ -316,12 +328,11 @@ func TestLockSpace_TailAfterHead(t *testing.T) {
 
 	rl2 := ml.NewResourceLock(ml.LockTypeRead, []string{"a"})
 	w2 := ls.Lock([]ml.ResourceLock{rl2})
-	assertLockWontWait(t, w2)
+	assertLockIsWaiting(t, w2)
 
 	rl3 := ml.NewResourceLock(ml.LockTypeRead, []string{"a", "b"})
 	w3 := ls.Lock([]ml.ResourceLock{rl3})
 	assertLockIsWaiting(t, w3)
-
 }
 
 func TestLockSpace_Complex_1(t *testing.T) {
