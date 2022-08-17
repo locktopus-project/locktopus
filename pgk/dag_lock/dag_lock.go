@@ -12,6 +12,12 @@ import (
 
 type LockType int8
 
+var lockTypeNames = []string{"read", "write"}
+
+func (lt LockType) String() string {
+	return lockTypeNames[lt]
+}
+
 const (
 	LockTypeRead  LockType = iota
 	LockTypeWrite LockType = iota
