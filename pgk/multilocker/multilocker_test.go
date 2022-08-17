@@ -876,3 +876,30 @@ func TestLock_PrefixAfterGroupWithFirstRead(t *testing.T) {
 
 	assertLockIsWaiting(t, l1)
 }
+
+func TestLock_WriteAfterPostfixRead(t *testing.T) {
+	ls := ml.NewLockSpace()
+
+	l := ls.Lock([]ml.ResourceLock{ml.NewResourceLock(ml.LockTypeRead, []string{"a"})})
+	l.Acquire()
+
+	l1 := ls.Lock([]ml.ResourceLock{ml.NewResourceLock(ml.LockTypeRead, []string{"a"}), ml.NewResourceLock(ml.LockTypeWrite, []string{"a"})})
+
+	assertLockIsWaiting(t, l1)
+}
+
+func TestLock_Complex_0(t *testing.T) {
+	ls := ml.NewLockSpace()
+
+	l := ls.Lock([]ml.ResourceLock{
+		ml.NewResourceLock(ml.LockTypeRead, []string{"1"}),
+	})
+	l.Acquire()
+
+	l1 := ls.Lock([]ml.ResourceLock{
+		ml.NewResourceLock(ml.LockTypeRead, []string{"1", "5"}),
+		ml.NewResourceLock(ml.LockTypeWrite, []string{"1", "2", "4", "1"}),
+	})
+
+	assertLockIsWaiting(t, l1)
+}
