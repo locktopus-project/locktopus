@@ -183,7 +183,7 @@ func (ls *LockSpace) lockResources(lockGroup []ResourceLock, u Unlocker) Lock {
 			buffer = newTokenBuffer(len(tokenRefs) * 2)
 		}
 
-	lockPathIteration:
+	lockPathIteration: // horizontal iteration over path segments
 		for i := range tokenRefs {
 			path := concatTokenRefs(tokenRefs[:i+1], buffer)
 
@@ -212,10 +212,11 @@ func (ls *LockSpace) lockResources(lockGroup []ResourceLock, u Unlocker) Lock {
 			refIsHead := false
 			refIsWrite := false
 
-			replaceAll := isHead
+			replaceAll := isHead && vertex.LockType() == LockTypeWrite
 			preventAppend := false
 
 			var ref lockRef
+			// vertical iteration over existing lock refs on the path
 			for i := len(existingRefs) - 1; i >= 0; i-- {
 				ref = existingRefs[i]
 
