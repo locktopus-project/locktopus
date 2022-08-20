@@ -212,9 +212,8 @@ func (ls *LockSpace) lockResources(lockGroup []ResourceLock, u Unlocker) Lock {
 			refIsWrite := false
 
 			replaceAll := isHead
-			replaceCurrent := false
-			preventAppend := false
 			isRedundant := false
+			preventAppend := false
 
 			var ref lockRef
 			for i := len(existingRefs) - 1; i >= 0; i-- {
@@ -223,6 +222,7 @@ func (ls *LockSpace) lockResources(lockGroup []ResourceLock, u Unlocker) Lock {
 				refIsHead = ref.t == head
 				refInGroup = groupVertexes.Has(ref.v)
 				refIsWrite = ref.v.LockType() == LockTypeWrite
+				replaceCurrent := false
 
 				if refInGroup && refIsHead && ref.v.LockType() >= lockType {
 					isRedundant = true

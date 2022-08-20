@@ -914,3 +914,20 @@ func TestLock_Complex_0(t *testing.T) {
 
 	assertLockIsWaiting(t, l1)
 }
+
+func TestLock_Complex_1(t *testing.T) {
+	ls := ml.NewLockSpace()
+
+	l := ls.Lock([]ml.ResourceLock{
+		ml.NewResourceLock(ml.LockTypeWrite, []string{"2"}),
+	})
+	l.Acquire()
+
+	l1 := ls.Lock([]ml.ResourceLock{
+		ml.NewResourceLock(ml.LockTypeRead, []string{"1"}),
+		ml.NewResourceLock(ml.LockTypeWrite, []string{"3"}),
+		ml.NewResourceLock(ml.LockTypeWrite, []string{}),
+	})
+
+	assertLockIsWaiting(t, l1)
+}
