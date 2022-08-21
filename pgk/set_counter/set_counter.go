@@ -6,6 +6,8 @@ import (
 
 // Set for storing keys. Thread-unsafe.
 // Unlike the classic Set, SetCounter counts the balance of Store/Release calls for each key and does not allow to release unexisting keys.
+// It returns pointers so they can be used as unique attributes of keys.
+// SetCounter is not thread-safe.
 type SetCounter struct {
 	m     map[string]*int64
 	count int64
@@ -59,10 +61,12 @@ func (sc *SetCounter) Release(key string) *int64 {
 	return value
 }
 
+// Sum returns the sum of all stored values (non-unique).
 func (sc *SetCounter) Sum() int64 {
 	return sc.count
 }
 
+// Count returns the number of unique keys in the set.
 func (sc *SetCounter) Count() int64 {
 	return int64(len(sc.m))
 }
