@@ -6,8 +6,8 @@ import (
 	"sync"
 	"testing"
 
-	ml "github.com/xshkut/gearlock/pgk/multilocker"
-	sliceAppender "github.com/xshkut/gearlock/pgk/slice_appender"
+	ml "github.com/xshkut/gearlock/pkg/multilocker"
+	sliceAppender "github.com/xshkut/gearlock/pkg/slice_appender"
 )
 
 func assertLockIsWaiting(t *testing.T, lw ml.Lock) {

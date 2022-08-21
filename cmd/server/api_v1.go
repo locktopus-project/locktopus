@@ -9,7 +9,7 @@ import (
 	"github.com/gorilla/websocket"
 	internal "github.com/xshkut/gearlock/internal/utils"
 
-	ml "github.com/xshkut/gearlock/pgk/multilocker"
+	ml "github.com/xshkut/gearlock/pkg/multilocker"
 )
 
 var upgrader = websocket.Upgrader{

@@ -1,7 +1,7 @@
 package main
 
 import (
-	ml "github.com/xshkut/gearlock/pgk/multilocker"
+	ml "github.com/xshkut/gearlock/pkg/multilocker"
 )
 
 var m = make(map[string]*ml.MultiLocker)
