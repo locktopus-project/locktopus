@@ -4,7 +4,7 @@ import (
 	"testing"
 )
 
-func TestSet_Add(t *testing.T) {
+func TestAdd(t *testing.T) {
 	s := make(Set[int])
 
 	if s.Has(0) {
@@ -18,7 +18,7 @@ func TestSet_Add(t *testing.T) {
 	}
 }
 
-func TestSet_Remove(t *testing.T) {
+func TestRemove(t *testing.T) {
 	s := make(Set[int])
 
 	s.Add(0)
@@ -34,7 +34,7 @@ func TestSet_Remove(t *testing.T) {
 	}
 }
 
-func TestSet_Clear(t *testing.T) {
+func TestClear(t *testing.T) {
 	s := make(Set[int])
 
 	s.Add(0)
