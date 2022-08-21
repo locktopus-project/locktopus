@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestSliceAppender_NewSliceAppender(t *testing.T) {
+func TestNewSliceAppender(t *testing.T) {
 	s := NewSliceAppender[int]()
 
 	if !reflect.DeepEqual(s.Value(), []int{}) {
@@ -13,7 +13,7 @@ func TestSliceAppender_NewSliceAppender(t *testing.T) {
 	}
 }
 
-func TestSliceAppender_Append(t *testing.T) {
+func TestAppend(t *testing.T) {
 	s := NewSliceAppender[int]()
 
 	s.Append(1, 2, 3)

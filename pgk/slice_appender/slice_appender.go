@@ -2,6 +2,7 @@ package sliceappender
 
 import "sync"
 
+// sliceAppender is a thread-safe wrapper around slice.
 type sliceAppender[T any] struct {
 	mx sync.Mutex
 	s  []T
