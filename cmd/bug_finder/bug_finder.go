@@ -1,57 +1,30 @@
+// This program is used to find bugs in multilocker.
+// It runs forever. Panic is considered to be a bug.
+
 package main
 
 import (
 	"flag"
 	"fmt"
-	"log"
 	"math/rand"
-	"os"
-	"os/signal"
-	"runtime"
-	"runtime/pprof"
-	"syscall"
 	"time"
 
 	ml "github.com/xshkut/distributed-lock/pgk/multilocker"
 )
 
-const branchingFactor = 5
-const maxTreeDepth = 5
-const fullRangeLockPeriod = 1000
-const maxGroupSize = 5
+const branchingFactor = 3
+const maxTreeDepth = 3
+const fullRangeLockPeriod = 10
+const maxGroupSize = 3
 const concurrency = 1000
 const maxLockDurationMs = 1
-
-const statsPeriodSec = 60
-const endAfterSec = 301
-
-var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
 
 func init() {
 	flag.Parse()
 }
 
 func main() {
-	var fm *os.File
-
-	if *cpuprofile != "" {
-		f, err := os.Create(*cpuprofile)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		fm, err = os.Create(*cpuprofile + ".mem")
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		pprof.StartCPUProfile(f)
-		defer pprof.StopCPUProfile()
-	}
-
 	ch := make(chan struct{}, 1000)
-
-	ls := ml.NewMultilocker()
 
 	for i := 0; i < concurrency; i++ {
 		go func() {
@@ -59,82 +32,9 @@ func main() {
 		}()
 	}
 
-	fmt.Println("GOMAXPROCS:", runtime.GOMAXPROCS(0))
-
-	time.Sleep(time.Duration(1) * time.Second)
-
-	keepRunning := true
-	needPrintStats := false
-	lastTime := time.Now()
-	lastCount := int64(0)
-
-	printStatsAfter := time.After(time.Duration(statsPeriodSec) * time.Second)
-
-	memStats := runtime.MemStats{}
-	runtime.ReadMemStats(&memStats)
-
-	initialMemUsage := memStats.Sys
-
-	go func() {
-		signals := make(chan os.Signal, 1)
-		signal.Notify(signals, syscall.SIGTERM, syscall.SIGINT)
-
-		sig := <-signals
-		if sig == syscall.SIGTERM || sig == syscall.SIGINT {
-			keepRunning = false
-		}
-		fmt.Println("Received signal:", sig)
-	}()
-
-	startTime := time.Now()
-	end := time.After(time.Second * endAfterSec)
-
-	for keepRunning {
+	for {
 		ch <- struct{}{}
-
-		select {
-		case <-end:
-			keepRunning = false
-		case <-printStatsAfter:
-			needPrintStats = true
-			printStatsAfter = time.After(time.Duration(statsPeriodSec) * time.Second)
-		default:
-		}
-
-		if needPrintStats {
-			now := time.Now()
-
-			stats := ls.Statistics()
-
-			memStats := runtime.MemStats{}
-			runtime.ReadMemStats(&memStats)
-
-			bytesPerClient := int((memStats.Sys - initialMemUsage) / uint64(concurrency))
-			takenTime := now.Sub(lastTime)
-			count := stats.LastGroupID - lastCount
-			rate := float64(count) / takenTime.Seconds()
-
-			fmt.Println(stats.LastGroupID, "locks simulated. Taken time:", takenTime.String(), ". Rate =", int(rate), "groups/sec", ". Bytes per client =", ByteCountIEC(int64(bytesPerClient)))
-			fmt.Printf("%+v\n", stats)
-			pprof.Lookup("heap").WriteTo(fm, 1)
-
-			lastTime = now
-			lastCount = stats.LastGroupID
-
-			needPrintStats = false
-		}
-
 	}
-
-	stats := ls.Statistics()
-	fmt.Println("Total average rate =", int(float64(stats.LastGroupID)/float64(time.Since(startTime).Seconds())), "groups/sec")
-
-	ls.Close()
-
-	time.Sleep(time.Duration(1) * time.Second)
-
-	fmt.Printf("%+v\n", stats)
-
 }
 
 func simulateClient(ch chan struct{}) {
