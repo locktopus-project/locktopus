@@ -3,7 +3,7 @@ package main
 import (
 	"sync"
 
-	ml "github.com/xshkut/distributed-lock/pgk/multilocker"
+	ml "github.com/xshkut/gearlock/pgk/multilocker"
 )
 
 type resourceRef struct {

@@ -9,7 +9,7 @@ import (
 	"math/rand"
 	"time"
 
-	ml "github.com/xshkut/distributed-lock/pgk/multilocker"
+	ml "github.com/xshkut/gearlock/pgk/multilocker"
 )
 
 const branchingFactor = 3

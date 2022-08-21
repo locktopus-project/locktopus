@@ -8,9 +8,9 @@ import (
 	"sync/atomic"
 	"unsafe"
 
-	dagLock "github.com/xshkut/distributed-lock/pgk/dag_lock"
-	"github.com/xshkut/distributed-lock/pgk/set"
-	setCounter "github.com/xshkut/distributed-lock/pgk/set_counter"
+	dagLock "github.com/xshkut/gearlock/pgk/dag_lock"
+	"github.com/xshkut/gearlock/pgk/set"
+	setCounter "github.com/xshkut/gearlock/pgk/set_counter"
 )
 
 type LockType = dagLock.LockType

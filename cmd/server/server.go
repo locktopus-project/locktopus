@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
-	internal "github.com/xshkut/distributed-lock/internal/utils"
+	internal "github.com/xshkut/gearlock/internal/utils"
 )
 
 // handle --port, -p argument

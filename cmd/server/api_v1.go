@@ -7,9 +7,9 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	internal "github.com/xshkut/distributed-lock/internal/utils"
+	internal "github.com/xshkut/gearlock/internal/utils"
 
-	ml "github.com/xshkut/distributed-lock/pgk/multilocker"
+	ml "github.com/xshkut/gearlock/pgk/multilocker"
 )
 
 var upgrader = websocket.Upgrader{
