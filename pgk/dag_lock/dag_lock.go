@@ -1,5 +1,7 @@
 /*
-https://en.wikipedia.org/wiki/Directed_acyclic_graph
+DAG-Lock implements a concept of unidirectional locks over directed acyclic graph (https://en.wikipedia.org/wiki/Directed_acyclic_graph).
+Each vertex can be locked when all its parents have been locked-unlocked.
+The exception is a sequence of read locks that can be acquired in parallel.
 */
 package daglock
 
@@ -10,6 +12,7 @@ import (
 	internal "github.com/xshkut/distributed-lock/pgk/set"
 )
 
+// LockType can be LockTypeRead or LockTypeWrite (see sync.RWMutex).
 type LockType int8
 
 var lockTypeNames = []string{"read", "write"}
@@ -23,7 +26,7 @@ const (
 	LockTypeWrite LockType = iota
 )
 
-// LockState lifecycle: LockedByParents -> Ready -> LockedByClient -> Unlocked
+// LockState lifecycle of a Vertex: [Created] -> [LockedByParents] -> [LockedByClient] -> [Released] -> [Unlocked]
 type LockState int8
 
 const (
@@ -34,7 +37,9 @@ const (
 	Unlocked        LockState = iota
 )
 
-// Vertex is a linked-list-based one-time mutex. Use NewVertex to create a new Vertex.
+// Vertex is a one-time-lock mutex, a part of the DAG-lock concept.
+// Use NewVertex to create a new Vertex.
+// All methods are thread-safe.
 type Vertex struct {
 	_mx             sync.Mutex
 	lockType        LockType
@@ -46,7 +51,6 @@ type Vertex struct {
 	calledLock      bool
 }
 
-// NewVerice
 func NewVertex(lockType LockType) *Vertex {
 	v := &Vertex{
 		lockType:        lockType,
@@ -62,18 +66,21 @@ func (v *Vertex) HasChildren() bool {
 	return len(v.children) > 0
 }
 
-func (v *Vertex) AddChild(child *Vertex) {
-	if child == nil {
+// AddChild sets c to be dependent on v.
+// After v is unlocked, child will be ready to acquire the lock.
+// Do not call Lock() or AddChild() on c before binding it to all necessary parents.
+func (v *Vertex) AddChild(c *Vertex) {
+	if c == nil {
 		panic("Unable to append nil child. Fix your logic or report a bug")
 	}
-	if child == v {
+	if c == v {
 		panic("Unable to append self. Fix your logic or report a bug")
 	}
 
 	v._mx.Lock()
 	defer v._mx.Unlock()
 
-	if child.HasChildren() {
+	if c.HasChildren() {
 		panic("Unable to bind a Vertex that already has children. This may introduce a deadlock. Fix your logic or report a bug")
 	}
 
@@ -81,10 +88,10 @@ func (v *Vertex) AddChild(child *Vertex) {
 		return
 	}
 
-	child._mx.Lock()
-	defer child._mx.Unlock()
+	c._mx.Lock()
+	defer c._mx.Unlock()
 
-	if child.lockState > LockedByParents {
+	if c.lockState > LockedByParents {
 		panic("Cannot bind released child. Fix your logic")
 	}
 
@@ -92,20 +99,20 @@ func (v *Vertex) AddChild(child *Vertex) {
 		v.lockState = Released
 	}
 
-	child.parents.Add(v)
-	v.children.Add(child)
+	c.parents.Add(v)
+	v.children.Add(c)
 
-	if v.lockState > LockedByParents && child.lockType == LockTypeRead && v.lockType == LockTypeRead {
+	if v.lockState > LockedByParents && c.lockType == LockTypeRead && v.lockType == LockTypeRead {
 		return
 	}
 
-	if child.lockState == Created {
-		child.selfMx.Lock()
-		child.lockState = LockedByParents
+	if c.lockState == Created {
+		c.selfMx.Lock()
+		c.lockState = LockedByParents
 	}
 }
 
-// Lock will not be acquired until all parents are unlocked.
+// Lock starts locking. It will not be acquired until all parents are unlocked.
 func (v *Vertex) Lock() {
 	v._mx.Lock()
 
@@ -123,8 +130,8 @@ func (v *Vertex) Lock() {
 	v._mx.Unlock()
 }
 
-// LockChain performs Lock and returns chan, waiting for result of which equals to waiting for Lock finish. If the lock has been acquired immediately, the returned chan is ready for receving in place.
-// This is a helper method which may be used inside "select" statement.
+// LockChan starts locking and returns chan that will emit a value when the lock is ready to be acquired. If the lock has been acquired immediately withing LockChan() call, the returned chan is ready for receving from.
+// This method can be used with "select" statement to check whether the lock has been acquired immediately (see tests).
 func (v *Vertex) LockChan() <-chan struct{} {
 	v._mx.Lock()
 	defer v._mx.Unlock()
@@ -157,6 +164,7 @@ func (v *Vertex) LockChan() <-chan struct{} {
 	return ch
 }
 
+// Unlock unlocks the vertex. Call Unlock() only after calling Lock().
 func (v *Vertex) Unlock() {
 	v._mx.Lock()
 
@@ -172,7 +180,7 @@ func (v *Vertex) Unlock() {
 	v.refreshState()
 }
 
-// Useless means that adding children to v has no point. However, doig so is not forbidden and will result in no-op.
+// Useless means that adding children to v has no point. However, doig so is not forbidden and will result in a no-op.
 func (v *Vertex) Useless() bool {
 	return v.lockState == Unlocked && !v.HasParents()
 }

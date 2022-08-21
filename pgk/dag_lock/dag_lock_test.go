@@ -6,11 +6,11 @@ import (
 	"testing"
 )
 
-func TestNewVertice_ShoudBeInStateCreated(t *testing.T) {
+func TestNewVertex_ShoudBeInStateCreated(t *testing.T) {
 	v := NewVertex(LockTypeWrite)
 
 	if v.lockState != Created {
-		t.Error("Newly created vertice is not in state Ready")
+		t.Error("Newly created vertex is not in state Ready")
 	}
 }
 
@@ -51,13 +51,13 @@ func TestAddChild_AddWithChildren(t *testing.T) {
 	NewVertex(LockTypeWrite).AddChild(v1)
 }
 
-func TestNewVertice_InitialLock(t *testing.T) {
+func TestNewLock_InitialLock(t *testing.T) {
 	v1 := NewVertex(LockTypeWrite)
 
 	v1.Lock()
 }
 
-func TestNewVertice_DoubleLock(t *testing.T) {
+func TestLock_DoubleLock(t *testing.T) {
 	v1 := NewVertex(LockTypeWrite)
 
 	v1.Lock()
@@ -71,7 +71,7 @@ func TestNewVertice_DoubleLock(t *testing.T) {
 	v1.Lock()
 }
 
-func TestNewVertice_LockUnlock(t *testing.T) {
+func TestLock_LockUnlock(t *testing.T) {
 	v1 := NewVertex(LockTypeWrite)
 
 	v1.Lock()
@@ -81,7 +81,7 @@ func TestNewVertice_LockUnlock(t *testing.T) {
 	v1.Unlock()
 }
 
-func TestNewVertice_UnlockBeforeLock(t *testing.T) {
+func TestUnlock_UnlockBeforeLock(t *testing.T) {
 	v1 := NewVertex(LockTypeWrite)
 
 	defer func() {
@@ -104,7 +104,7 @@ func TestLockChan_ImmediateReceive(t *testing.T) {
 	}
 }
 
-func TestLockChan_NoReceiveLocked(t *testing.T) {
+func TestLockChan_NoReceiveWhenNotAcquired(t *testing.T) {
 	v1 := NewVertex(LockTypeWrite)
 
 	v2 := NewVertex(LockTypeWrite)
@@ -118,7 +118,7 @@ func TestLockChan_NoReceiveLocked(t *testing.T) {
 	}
 }
 
-func TestLockChan_ImmediateReceiveReadStacks(t *testing.T) {
+func TestLockChan_ImmediateReceiveOnSequentialReads(t *testing.T) {
 	v1 := NewVertex(LockTypeRead)
 	v2 := NewVertex(LockTypeRead)
 
@@ -147,7 +147,7 @@ func TestLockChan_WaitIfLocked(t *testing.T) {
 	<-v2.LockChan()
 }
 
-func TestNewVertice_SequentialOrder_LockBeforeAddChild(t *testing.T) {
+func TestLock_SequentialOrder_LockBeforeAddChild(t *testing.T) {
 	order := make([]int, 0)
 
 	v1 := NewVertex(LockTypeWrite)
@@ -179,7 +179,7 @@ func TestNewVertice_SequentialOrder_LockBeforeAddChild(t *testing.T) {
 	}
 }
 
-func TestNewVertice_SequentialOrder_AddChildBeforeLock(t *testing.T) {
+func TestLock_SequentialOrder_AddChildBeforeLock(t *testing.T) {
 	order := make([]int, 0)
 	wg := sync.WaitGroup{}
 	wg.Add(4)
@@ -232,7 +232,7 @@ func TestNewVertice_SequentialOrder_AddChildBeforeLock(t *testing.T) {
 	}
 }
 
-func TestNewVertice_StackedReadsMustBeLockedIndependently(t *testing.T) {
+func TestLock_StackedReadsMustBeLockedIndependently(t *testing.T) {
 	order := make([]int, 0)
 	wg := sync.WaitGroup{}
 	wg.Add(3)
@@ -287,7 +287,7 @@ func TestNewVertice_StackedReadsMustBeLockedIndependently(t *testing.T) {
 	}
 }
 
-func TestNewVertice_EnsureTailingReadWorks(t *testing.T) {
+func TestLock_EnsureTailingReadWorks(t *testing.T) {
 	order := make([]int, 0)
 	wg := sync.WaitGroup{}
 	wg.Add(2)
@@ -338,7 +338,7 @@ func TestNewVertice_EnsureTailingReadWorks(t *testing.T) {
 	}
 }
 
-func TestNewVertice_EnsureTailingWriteWorks(t *testing.T) {
+func TestLock_EnsureTailingWriteWorks(t *testing.T) {
 	order := make([]int, 0)
 	wg := sync.WaitGroup{}
 	wg.Add(2)
@@ -389,7 +389,7 @@ func TestNewVertice_EnsureTailingWriteWorks(t *testing.T) {
 	}
 }
 
-func TestNewVertice_EnsureStackedReadsAreAllBlocked(t *testing.T) {
+func TestLock_EnsureStackedReadsAreAllBlocked(t *testing.T) {
 	v1 := NewVertex(LockTypeWrite)
 	v2 := NewVertex(LockTypeRead)
 	v3 := NewVertex(LockTypeRead)
@@ -411,7 +411,7 @@ func TestNewVertice_EnsureStackedReadsAreAllBlocked(t *testing.T) {
 	}
 }
 
-func TestNewVertice_EnsureStackedWritesAreAllBlocked(t *testing.T) {
+func TestLock_EnsureStackedWritesAreAllBlocked(t *testing.T) {
 	v1 := NewVertex(LockTypeWrite)
 	v2 := NewVertex(LockTypeRead)
 	v3 := NewVertex(LockTypeRead)
@@ -433,7 +433,7 @@ func TestNewVertice_EnsureStackedWritesAreAllBlocked(t *testing.T) {
 	}
 }
 
-func TestNewVertice_StackedReadsLockIndependently_2(t *testing.T) {
+func TestLock_StackedReadsLockIndependently_2(t *testing.T) {
 	v1 := NewVertex(LockTypeRead)
 	v2 := NewVertex(LockTypeRead)
 
@@ -442,7 +442,7 @@ func TestNewVertice_StackedReadsLockIndependently_2(t *testing.T) {
 	v2.Lock()
 }
 
-func TestNewVertice_UnlockedShouldHaveNotChildren(t *testing.T) {
+func TestLock_UnlockedShouldHaveNotChildren(t *testing.T) {
 	v1 := NewVertex(LockTypeRead)
 	v2 := NewVertex(LockTypeRead)
 	v3 := NewVertex(LockTypeWrite)
