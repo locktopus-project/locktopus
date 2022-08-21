@@ -33,12 +33,12 @@ func assertOrder(t *testing.T, order []int, expected []int) {
 }
 
 func TestLock_SecondArgumentIsReceivedFromChan(t *testing.T) {
-	ls := ml.NewMultilocker()
+	m := ml.NewMultilocker()
 
 	lr := ml.NewResourceLock(ml.LockTypeRead, []string{"a", "b", "c"})
 
 	ul := ml.NewUnlocker()
-	unlock := ls.Lock([]ml.ResourceLock{lr}, ul).Acquire()
+	unlock := m.Lock([]ml.ResourceLock{lr}, ul).Acquire()
 
 	if unlock != ul {
 		t.Error("Second argument should be received from chan")
@@ -46,22 +46,22 @@ func TestLock_SecondArgumentIsReceivedFromChan(t *testing.T) {
 }
 
 func TestLock_SingleGroupShouldBeLockedImmediately(t *testing.T) {
-	ls := ml.NewMultilocker()
+	m := ml.NewMultilocker()
 
 	lr := ml.NewResourceLock(ml.LockTypeRead, []string{"a", "b", "c"})
 
-	ls.Lock([]ml.ResourceLock{lr})
+	m.Lock([]ml.ResourceLock{lr})
 }
 
 func TestLock_PrematureUnlock(t *testing.T) {
-	ls := ml.NewMultilocker()
+	m := ml.NewMultilocker()
 
 	u := ml.NewUnlocker()
 	go func() { u.Unlock() }()
 
 	runtime.Gosched()
 
-	l := ls.Lock([]ml.ResourceLock{
+	l := m.Lock([]ml.ResourceLock{
 		ml.NewResourceLock(ml.LockTypeRead, []string{"1"}),
 	}, u)
 
@@ -70,57 +70,57 @@ func TestLock_PrematureUnlock(t *testing.T) {
 }
 
 func TestLock_DuplicateRecordsShouldNotBringDeadlock(t *testing.T) {
-	ls := ml.NewMultilocker()
+	m := ml.NewMultilocker()
 
 	lr1 := ml.NewResourceLock(ml.LockTypeWrite, []string{"a", "b", "c"})
 	lr2 := ml.NewResourceLock(ml.LockTypeWrite, []string{"a", "b", "c"})
 
-	ls.Lock([]ml.ResourceLock{lr1, lr2})
+	m.Lock([]ml.ResourceLock{lr1, lr2})
 }
 
 func TestLock_EmptyPathShouldBlock(t *testing.T) {
-	ls := ml.NewMultilocker()
+	m := ml.NewMultilocker()
 
 	lr1 := ml.NewResourceLock(ml.LockTypeWrite, []string{})
-	ls.Lock([]ml.ResourceLock{lr1})
+	m.Lock([]ml.ResourceLock{lr1})
 
 	lr2 := ml.NewResourceLock(ml.LockTypeWrite, []string{})
 
-	w := ls.Lock([]ml.ResourceLock{lr2})
+	w := m.Lock([]ml.ResourceLock{lr2})
 	assertLockIsWaiting(t, w)
 }
 
 func TestLock_ConcurrentGroupShouldBlock(t *testing.T) {
-	ls := ml.NewMultilocker()
+	m := ml.NewMultilocker()
 
 	lr1 := ml.NewResourceLock(ml.LockTypeWrite, []string{"a", "b", "c"})
-	ls.Lock([]ml.ResourceLock{lr1})
+	m.Lock([]ml.ResourceLock{lr1})
 
 	lr2 := ml.NewResourceLock(ml.LockTypeWrite, []string{"a", "b", "c"})
 
-	w := ls.Lock([]ml.ResourceLock{lr2})
+	w := m.Lock([]ml.ResourceLock{lr2})
 	assertLockIsWaiting(t, w)
 }
 
 func TestLock_EmptyPathShouldAlsoCauseBlock(t *testing.T) {
-	ls := ml.NewMultilocker()
+	m := ml.NewMultilocker()
 
 	lr1 := ml.NewResourceLock(ml.LockTypeWrite, []string{})
-	ls.Lock([]ml.ResourceLock{lr1})
+	m.Lock([]ml.ResourceLock{lr1})
 
 	lr2 := ml.NewResourceLock(ml.LockTypeWrite, []string{"a", "b", "c"})
-	w := ls.Lock([]ml.ResourceLock{lr2})
+	w := m.Lock([]ml.ResourceLock{lr2})
 	assertLockIsWaiting(t, w)
 }
 
 func TestLock_TestRelease(t *testing.T) {
-	ls := ml.NewMultilocker()
+	m := ml.NewMultilocker()
 
 	path := []string{"a", "b", "c"}
 
 	lr1 := ml.NewResourceLock(ml.LockTypeWrite, path)
-	w1 := ls.Lock([]ml.ResourceLock{lr1})
-	w2 := ls.Lock([]ml.ResourceLock{lr1})
+	w1 := m.Lock([]ml.ResourceLock{lr1})
+	w2 := m.Lock([]ml.ResourceLock{lr1})
 
 	assertLockWontWait(t, w1)
 	assertLockIsWaiting(t, w2)
@@ -135,85 +135,85 @@ func TestLock_TestRelease(t *testing.T) {
 }
 
 func TestLock_ParallelWritesShouldSucced(t *testing.T) {
-	ls := ml.NewMultilocker()
+	m := ml.NewMultilocker()
 
 	lr1 := ml.NewResourceLock(ml.LockTypeWrite, []string{"a", "b", "1"})
-	w := ls.Lock([]ml.ResourceLock{lr1})
+	w := m.Lock([]ml.ResourceLock{lr1})
 	assertLockWontWait(t, w)
 
 	lr2 := ml.NewResourceLock(ml.LockTypeWrite, []string{"a", "b", "2"})
-	w = ls.Lock([]ml.ResourceLock{lr2})
+	w = m.Lock([]ml.ResourceLock{lr2})
 	assertLockWontWait(t, w)
 }
 
 func TestLock_ParallelReadsShouldSucced(t *testing.T) {
-	ls := ml.NewMultilocker()
+	m := ml.NewMultilocker()
 
 	lr1 := ml.NewResourceLock(ml.LockTypeRead, []string{"a", "b", "1"})
-	w := ls.Lock([]ml.ResourceLock{lr1})
+	w := m.Lock([]ml.ResourceLock{lr1})
 	assertLockWontWait(t, w)
 
 	lr2 := ml.NewResourceLock(ml.LockTypeRead, []string{"a", "b", "2"})
-	w = ls.Lock([]ml.ResourceLock{lr2})
+	w = m.Lock([]ml.ResourceLock{lr2})
 	assertLockWontWait(t, w)
 }
 
 func TestLock_SequentialWritesShouldBlocked_Postfix(t *testing.T) {
-	ls := ml.NewMultilocker()
+	m := ml.NewMultilocker()
 
 	lr1 := ml.NewResourceLock(ml.LockTypeWrite, []string{"a", "b"})
-	ls.Lock([]ml.ResourceLock{lr1})
+	m.Lock([]ml.ResourceLock{lr1})
 
 	lr2 := ml.NewResourceLock(ml.LockTypeWrite, []string{"a", "b", "2"})
-	w := ls.Lock([]ml.ResourceLock{lr2})
+	w := m.Lock([]ml.ResourceLock{lr2})
 
 	assertLockIsWaiting(t, w)
 }
 
 func TestLock_SequentialWritesShouldBlocked_Prefix(t *testing.T) {
-	ls := ml.NewMultilocker()
+	m := ml.NewMultilocker()
 
 	lr1 := ml.NewResourceLock(ml.LockTypeWrite, []string{"a", "b", "2"})
-	ls.Lock([]ml.ResourceLock{lr1})
+	m.Lock([]ml.ResourceLock{lr1})
 
 	lr2 := ml.NewResourceLock(ml.LockTypeWrite, []string{"a", "b"})
-	w := ls.Lock([]ml.ResourceLock{lr2})
+	w := m.Lock([]ml.ResourceLock{lr2})
 
 	assertLockIsWaiting(t, w)
 }
 
 func TestLock_AdjacentReadsDoNotBlockEachOther(t *testing.T) {
-	ls := ml.NewMultilocker()
+	m := ml.NewMultilocker()
 
 	lr1 := ml.NewResourceLock(ml.LockTypeWrite, []string{"a"})
-	w1 := ls.Lock([]ml.ResourceLock{lr1})
+	w1 := m.Lock([]ml.ResourceLock{lr1})
 
 	lr2 := ml.NewResourceLock(ml.LockTypeRead, []string{"a", "b"})
-	w2 := ls.Lock([]ml.ResourceLock{lr2})
+	w2 := m.Lock([]ml.ResourceLock{lr2})
 
 	lr3 := ml.NewResourceLock(ml.LockTypeRead, []string{"a", "b", "1"})
-	w3 := ls.Lock([]ml.ResourceLock{lr3})
+	w3 := m.Lock([]ml.ResourceLock{lr3})
 
 	lr4 := ml.NewResourceLock(ml.LockTypeRead, []string{"a", "b", "2"})
-	w4 := ls.Lock([]ml.ResourceLock{lr4})
+	w4 := m.Lock([]ml.ResourceLock{lr4})
 
 	lr5 := ml.NewResourceLock(ml.LockTypeRead, []string{"a", "b", "1", "a"})
-	w5 := ls.Lock([]ml.ResourceLock{lr5})
+	w5 := m.Lock([]ml.ResourceLock{lr5})
 
 	lr6 := ml.NewResourceLock(ml.LockTypeRead, []string{"a", "b", "1", "b"})
-	w6 := ls.Lock([]ml.ResourceLock{lr6})
+	w6 := m.Lock([]ml.ResourceLock{lr6})
 
 	lr7 := ml.NewResourceLock(ml.LockTypeRead, []string{"a", "b", "2", "a"})
-	w7 := ls.Lock([]ml.ResourceLock{lr7})
+	w7 := m.Lock([]ml.ResourceLock{lr7})
 
 	lr8 := ml.NewResourceLock(ml.LockTypeRead, []string{"a", "b", "2", "b"})
-	w8 := ls.Lock([]ml.ResourceLock{lr8})
+	w8 := m.Lock([]ml.ResourceLock{lr8})
 
 	lr9 := ml.NewResourceLock(ml.LockTypeRead, []string{})
-	w9 := ls.Lock([]ml.ResourceLock{lr9})
+	w9 := m.Lock([]ml.ResourceLock{lr9})
 
 	lr10 := ml.NewResourceLock(ml.LockTypeWrite, []string{"a", "b", "2", "b", "c"})
-	w10 := ls.Lock([]ml.ResourceLock{lr10})
+	w10 := m.Lock([]ml.ResourceLock{lr10})
 
 	assertLockWontWait(t, w1)
 
@@ -262,22 +262,22 @@ func TestLock_AdjacentReadsDoNotBlockEachOther(t *testing.T) {
 }
 
 func TestLock_PartialWriteOverlapping(t *testing.T) {
-	ls := ml.NewMultilocker()
+	m := ml.NewMultilocker()
 
 	rl1 := ml.NewResourceLock(ml.LockTypeWrite, []string{"a", "1"})
 	rl2 := ml.NewResourceLock(ml.LockTypeWrite, []string{"a", "2"})
 	rl3 := ml.NewResourceLock(ml.LockTypeWrite, []string{"a", "3"})
-	w1 := ls.Lock([]ml.ResourceLock{rl1, rl2, rl3})
+	w1 := m.Lock([]ml.ResourceLock{rl1, rl2, rl3})
 
 	rl4 := ml.NewResourceLock(ml.LockTypeRead, []string{"a", "3"})
 	rl5 := ml.NewResourceLock(ml.LockTypeRead, []string{"a", "4"})
 	rl6 := ml.NewResourceLock(ml.LockTypeRead, []string{"a", "5"})
-	w2 := ls.Lock([]ml.ResourceLock{rl4, rl5, rl6})
+	w2 := m.Lock([]ml.ResourceLock{rl4, rl5, rl6})
 
 	rl7 := ml.NewResourceLock(ml.LockTypeWrite, []string{"a", "5"})
 	rl8 := ml.NewResourceLock(ml.LockTypeWrite, []string{"a", "6"})
 	rl9 := ml.NewResourceLock(ml.LockTypeWrite, []string{"a", "7"})
-	w3 := ls.Lock([]ml.ResourceLock{rl7, rl8, rl9})
+	w3 := m.Lock([]ml.ResourceLock{rl7, rl8, rl9})
 
 	assertLockIsWaiting(t, w2)
 	assertLockIsWaiting(t, w3)
@@ -292,22 +292,22 @@ func TestLock_PartialWriteOverlapping(t *testing.T) {
 }
 
 func TestLock_PartialReadOverlapping(t *testing.T) {
-	ls := ml.NewMultilocker()
+	m := ml.NewMultilocker()
 
 	rl1 := ml.NewResourceLock(ml.LockTypeWrite, []string{"a", "1"})
 	rl2 := ml.NewResourceLock(ml.LockTypeWrite, []string{"a", "2"})
 	rl3 := ml.NewResourceLock(ml.LockTypeRead, []string{"a", "3"})
-	w1 := ls.Lock([]ml.ResourceLock{rl1, rl2, rl3})
+	w1 := m.Lock([]ml.ResourceLock{rl1, rl2, rl3})
 
 	rl4 := ml.NewResourceLock(ml.LockTypeRead, []string{"a", "3"})
 	rl5 := ml.NewResourceLock(ml.LockTypeWrite, []string{"a", "4"})
 	rl6 := ml.NewResourceLock(ml.LockTypeRead, []string{"a", "5"})
-	w2 := ls.Lock([]ml.ResourceLock{rl4, rl5, rl6})
+	w2 := m.Lock([]ml.ResourceLock{rl4, rl5, rl6})
 
 	rl7 := ml.NewResourceLock(ml.LockTypeRead, []string{"a", "5"})
 	rl8 := ml.NewResourceLock(ml.LockTypeWrite, []string{"a", "6"})
 	rl9 := ml.NewResourceLock(ml.LockTypeWrite, []string{"a", "7"})
-	w3 := ls.Lock([]ml.ResourceLock{rl7, rl8, rl9})
+	w3 := m.Lock([]ml.ResourceLock{rl7, rl8, rl9})
 
 	w3.Acquire()
 	w2.Acquire()
@@ -315,17 +315,17 @@ func TestLock_PartialReadOverlapping(t *testing.T) {
 }
 
 func TestLock_HeadAfterTail(t *testing.T) {
-	ls := ml.NewMultilocker()
+	m := ml.NewMultilocker()
 
 	rl1 := ml.NewResourceLock(ml.LockTypeWrite, []string{"a", "1"})
-	w1 := ls.Lock([]ml.ResourceLock{rl1})
+	w1 := m.Lock([]ml.ResourceLock{rl1})
 
 	rl21 := ml.NewResourceLock(ml.LockTypeRead, []string{"a", "1", "2"})
 	rl22 := ml.NewResourceLock(ml.LockTypeWrite, []string{"a", "1"})
-	ls.Lock([]ml.ResourceLock{rl21, rl22})
+	m.Lock([]ml.ResourceLock{rl21, rl22})
 
 	rl3 := ml.NewResourceLock(ml.LockTypeRead, []string{"a", "1"})
-	w3 := ls.Lock([]ml.ResourceLock{rl3})
+	w3 := m.Lock([]ml.ResourceLock{rl3})
 
 	w1.Acquire().Unlock()
 
@@ -333,31 +333,31 @@ func TestLock_HeadAfterTail(t *testing.T) {
 }
 
 func TestLock_TailAfterHead(t *testing.T) {
-	ls := ml.NewMultilocker()
+	m := ml.NewMultilocker()
 
 	rl01 := ml.NewResourceLock(ml.LockTypeRead, []string{"a"})
 	rl02 := ml.NewResourceLock(ml.LockTypeWrite, []string{"a", "b"})
-	ls.Lock([]ml.ResourceLock{rl01, rl02})
+	m.Lock([]ml.ResourceLock{rl01, rl02})
 
 	rl1 := ml.NewResourceLock(ml.LockTypeRead, []string{"a", "c"})
-	w1 := ls.Lock([]ml.ResourceLock{rl1})
+	w1 := m.Lock([]ml.ResourceLock{rl1})
 	assertLockWontWait(t, w1)
 
 	rl2 := ml.NewResourceLock(ml.LockTypeRead, []string{"a"})
-	w2 := ls.Lock([]ml.ResourceLock{rl2})
+	w2 := m.Lock([]ml.ResourceLock{rl2})
 	assertLockIsWaiting(t, w2)
 
 	rl3 := ml.NewResourceLock(ml.LockTypeRead, []string{"a", "b"})
-	w3 := ls.Lock([]ml.ResourceLock{rl3})
+	w3 := m.Lock([]ml.ResourceLock{rl3})
 	assertLockIsWaiting(t, w3)
 }
 
 func TestStop_StopAfterStop(t *testing.T) {
-	ls := ml.NewMultilocker()
+	m := ml.NewMultilocker()
 
-	_ = ls
+	_ = m
 
-	ls.Close()
+	m.Close()
 
 	defer func() {
 		if r := recover(); r == nil {
@@ -365,13 +365,13 @@ func TestStop_StopAfterStop(t *testing.T) {
 		}
 	}()
 
-	ls.Close()
+	m.Close()
 }
 
 func TestStop_LockGroupAfterStop(t *testing.T) {
-	ls := ml.NewMultilocker()
+	m := ml.NewMultilocker()
 
-	ls.Close()
+	m.Close()
 
 	defer func() {
 		if r := recover(); r == nil {
@@ -379,14 +379,14 @@ func TestStop_LockGroupAfterStop(t *testing.T) {
 		}
 	}()
 
-	ls.Lock([]ml.ResourceLock{ml.NewResourceLock(ml.LockTypeRead, []string{"a"})})
+	m.Lock([]ml.ResourceLock{ml.NewResourceLock(ml.LockTypeRead, []string{"a"})})
 }
 
 func TestLock_GroupID(t *testing.T) {
-	ls := ml.NewMultilocker()
+	m := ml.NewMultilocker()
 
-	w1 := ls.Lock([]ml.ResourceLock{ml.NewResourceLock(ml.LockTypeRead, []string{"a"})})
-	w2 := ls.Lock([]ml.ResourceLock{ml.NewResourceLock(ml.LockTypeRead, []string{"a"})})
+	w1 := m.Lock([]ml.ResourceLock{ml.NewResourceLock(ml.LockTypeRead, []string{"a"})})
+	w2 := m.Lock([]ml.ResourceLock{ml.NewResourceLock(ml.LockTypeRead, []string{"a"})})
 
 	if w1.ID() != 1 {
 		t.Error("Expected ID = 1")
@@ -398,27 +398,27 @@ func TestLock_GroupID(t *testing.T) {
 }
 
 func TestStatistics_LastGroupID(t *testing.T) {
-	ls := ml.NewMultilocker()
+	m := ml.NewMultilocker()
 
 	lr := ml.NewResourceLock(ml.LockTypeWrite, []string{"a", "b", "c"})
-	locker := ls.Lock([]ml.ResourceLock{lr})
+	locker := m.Lock([]ml.ResourceLock{lr})
 
-	if ls.Statistics().LastGroupID != locker.ID() {
+	if m.Statistics().LastGroupID != locker.ID() {
 		t.Error("Expected LastGroupID = locker.ID()")
 	}
 }
 
 func TestStatistics_Tokens(t *testing.T) {
-	ls := ml.NewMultilocker()
+	m := ml.NewMultilocker()
 
-	s0 := ls.Statistics()
+	s0 := m.Statistics()
 
 	lr0 := ml.NewResourceLock(ml.LockTypeWrite, []string{"a", "b", "a"})
 	lr1 := ml.NewResourceLock(ml.LockTypeWrite, []string{"a", "b", "c"})
-	locker := ls.Lock([]ml.ResourceLock{lr0, lr1})
+	locker := m.Lock([]ml.ResourceLock{lr0, lr1})
 	u := locker.Acquire()
 
-	s1 := ls.Statistics()
+	s1 := m.Statistics()
 
 	if s1.TokensTotal != s0.TokensTotal+6 {
 		t.Errorf("Wrong TokensTotal after lock")
@@ -430,7 +430,7 @@ func TestStatistics_Tokens(t *testing.T) {
 
 	u.Unlock()
 
-	s2 := ls.Statistics()
+	s2 := m.Statistics()
 
 	if s2.TokensTotal != s0.TokensTotal {
 		t.Errorf("Expected TokensTotal after unlock")
@@ -442,9 +442,9 @@ func TestStatistics_Tokens(t *testing.T) {
 }
 
 func TestStatistics_Groups(t *testing.T) {
-	ls := ml.NewMultilocker()
+	m := ml.NewMultilocker()
 
-	s0 := ls.Statistics()
+	s0 := m.Statistics()
 
 	if s0.GroupsPending != 0 {
 		t.Errorf("Expected GroupsPending = 0, got %d", s0.GroupsPending)
@@ -455,9 +455,9 @@ func TestStatistics_Groups(t *testing.T) {
 	}
 
 	lr0 := ml.NewResourceLock(ml.LockTypeWrite, []string{"a"})
-	locker0 := ls.Lock([]ml.ResourceLock{lr0})
+	locker0 := m.Lock([]ml.ResourceLock{lr0})
 
-	s1 := ls.Statistics()
+	s1 := m.Statistics()
 
 	if s1.GroupsPending != 0 {
 		t.Errorf("Expected GroupsPending = 0, got %d", s1.GroupsPending)
@@ -468,9 +468,9 @@ func TestStatistics_Groups(t *testing.T) {
 	}
 
 	lr1 := ml.NewResourceLock(ml.LockTypeRead, []string{"a"})
-	locker1 := ls.Lock([]ml.ResourceLock{lr1})
+	locker1 := m.Lock([]ml.ResourceLock{lr1})
 
-	s2 := ls.Statistics()
+	s2 := m.Statistics()
 
 	if s2.GroupsPending != 1 {
 		t.Errorf("Expected GroupsPending = 1, got %d", s2.GroupsPending)
@@ -483,7 +483,7 @@ func TestStatistics_Groups(t *testing.T) {
 	locker0.Acquire().Unlock()
 	locker1.Acquire()
 
-	s3 := ls.Statistics()
+	s3 := m.Statistics()
 
 	if s3.GroupsPending != 0 {
 		t.Errorf("Expected GroupsPending = 0, got %d", s3.GroupsPending)
@@ -494,11 +494,11 @@ func TestStatistics_Groups(t *testing.T) {
 	}
 
 	lr2 := ml.NewResourceLock(ml.LockTypeRead, []string{"a"})
-	locker2 := ls.Lock([]ml.ResourceLock{lr2})
+	locker2 := m.Lock([]ml.ResourceLock{lr2})
 
 	locker2.Acquire()
 
-	s4 := ls.Statistics()
+	s4 := m.Statistics()
 
 	if s4.GroupsPending != 0 {
 		t.Errorf("Expected GroupsPending = 0, got %d", s4.GroupsPending)
@@ -510,9 +510,9 @@ func TestStatistics_Groups(t *testing.T) {
 }
 
 func TestStatistics_Locks(t *testing.T) {
-	ls := ml.NewMultilocker()
+	m := ml.NewMultilocker()
 
-	s0 := ls.Statistics()
+	s0 := m.Statistics()
 
 	if s0.LocksAcquired != 0 {
 		t.Errorf("Expected LocksAcquired = 0, got %d", s0.GroupsPending)
@@ -523,9 +523,9 @@ func TestStatistics_Locks(t *testing.T) {
 	}
 
 	lr0 := ml.NewResourceLock(ml.LockTypeWrite, []string{"a", "b"})
-	locker0 := ls.Lock([]ml.ResourceLock{lr0})
+	locker0 := m.Lock([]ml.ResourceLock{lr0})
 
-	s1 := ls.Statistics()
+	s1 := m.Statistics()
 
 	if s1.LocksAcquired != 1 {
 		t.Errorf("Expected LocksAcquired = 1, got %d", s1.GroupsPending)
@@ -536,9 +536,9 @@ func TestStatistics_Locks(t *testing.T) {
 	}
 
 	lr1 := ml.NewResourceLock(ml.LockTypeRead, []string{"a", "b"})
-	locker1 := ls.Lock([]ml.ResourceLock{lr1})
+	locker1 := m.Lock([]ml.ResourceLock{lr1})
 
-	s2 := ls.Statistics()
+	s2 := m.Statistics()
 
 	if s2.LocksAcquired != 1 {
 		t.Errorf("Expected LocksAcquired = 1, got %d", s2.GroupsPending)
@@ -551,7 +551,7 @@ func TestStatistics_Locks(t *testing.T) {
 	locker0.Acquire().Unlock()
 	locker1.Acquire()
 
-	s3 := ls.Statistics()
+	s3 := m.Statistics()
 
 	if s3.LocksAcquired != 1 {
 		t.Errorf("Expected LocksAcquired = 1, got %d", s3.GroupsPending)
@@ -563,7 +563,7 @@ func TestStatistics_Locks(t *testing.T) {
 
 	locker1.Acquire().Unlock()
 
-	s4 := ls.Statistics()
+	s4 := m.Statistics()
 
 	if s4.LocksAcquired != 0 {
 		t.Errorf("Expected LocksAcquired = 0, got %d", s4.GroupsPending)
@@ -575,39 +575,39 @@ func TestStatistics_Locks(t *testing.T) {
 }
 
 func TestStatistics_LockShadowing_Write(t *testing.T) {
-	ls := ml.NewMultilocker()
+	m := ml.NewMultilocker()
 
 	lr0 := ml.NewResourceLock(ml.LockTypeWrite, []string{"a"})
 	// Shadowed by lr0
 	lr1 := ml.NewResourceLock(ml.LockTypeWrite, []string{"a", "b"})
 	// Shadowed by lr0
 	lr2 := ml.NewResourceLock(ml.LockTypeWrite, []string{"a", "b", "c"})
-	ls.Lock([]ml.ResourceLock{lr0, lr1, lr2})
+	m.Lock([]ml.ResourceLock{lr0, lr1, lr2})
 
-	s := ls.Statistics()
+	s := m.Statistics()
 	if s.LocksAcquired != 1 {
 		t.Errorf("Expected locks: 1, got %d", s.LocksAcquired)
 	}
 }
 
 func TestStatistics_LockShadowing_WriteAfterRead(t *testing.T) {
-	ls := ml.NewMultilocker()
+	m := ml.NewMultilocker()
 
 	lr0 := ml.NewResourceLock(ml.LockTypeRead, []string{"a"})
 	// Not shadowed by lr0
 	lr1 := ml.NewResourceLock(ml.LockTypeWrite, []string{"a", "b"})
-	ls.Lock([]ml.ResourceLock{lr0, lr1})
+	m.Lock([]ml.ResourceLock{lr0, lr1})
 
-	s := ls.Statistics()
+	s := m.Statistics()
 	if s.LocksAcquired != 2 {
 		t.Errorf("Expected 2 locks, got %d", s.LocksAcquired)
 	}
 }
 
 func TestStatistics_LockrefCount(t *testing.T) {
-	ls := ml.NewMultilocker()
+	m := ml.NewMultilocker()
 
-	s0 := ls.Statistics()
+	s0 := m.Statistics()
 
 	if s0.LockrefCount != 0 {
 		t.Errorf("Expected LockrefCount = 0, got %d", s0.LockrefCount)
@@ -615,25 +615,25 @@ func TestStatistics_LockrefCount(t *testing.T) {
 
 	lr0 := ml.NewResourceLock(ml.LockTypeRead, []string{"a"})
 	lr1 := ml.NewResourceLock(ml.LockTypeWrite, []string{"a", "b"})
-	l := ls.Lock([]ml.ResourceLock{lr0, lr1})
+	l := m.Lock([]ml.ResourceLock{lr0, lr1})
 
-	s1 := ls.Statistics()
+	s1 := m.Statistics()
 	if s1.LockrefCount == 0 {
 		t.Errorf("There should be lock refs")
 	}
 
 	l.Acquire().Unlock()
 
-	ls.Close()
+	m.Close()
 
-	s2 := ls.Statistics()
+	s2 := m.Statistics()
 	if s2.LockrefCount != 0 {
 		t.Errorf("Expected LockrefCount = 0, got %d", s2.LockrefCount)
 	}
 }
 
 func TestStop_PathCount(t *testing.T) {
-	ls := ml.NewMultilocker()
+	m := ml.NewMultilocker()
 
 	lr := ml.NewResourceLock(ml.LockTypeRead, []string{"0"})
 	lr1 := ml.NewResourceLock(ml.LockTypeRead, []string{})
@@ -644,8 +644,8 @@ func TestStop_PathCount(t *testing.T) {
 	for j := 0; j < N; j++ {
 		wg.Add(1)
 
-		l := ls.Lock([]ml.ResourceLock{lr})
-		l1 := ls.Lock([]ml.ResourceLock{lr1})
+		l := m.Lock([]ml.ResourceLock{lr})
+		l1 := m.Lock([]ml.ResourceLock{lr1})
 
 		l.Acquire()
 		l.Acquire().Unlock()
@@ -660,9 +660,9 @@ func TestStop_PathCount(t *testing.T) {
 
 	wg.Wait()
 
-	ls.Close()
+	m.Close()
 
-	s := ls.Statistics()
+	s := m.Statistics()
 
 	if s.PathCount != 0 {
 		t.Errorf("Expected PathCount = 0, got %d", s.PathCount)
@@ -670,10 +670,10 @@ func TestStop_PathCount(t *testing.T) {
 }
 
 func TestLock_MultipleAcquires(t *testing.T) {
-	ls := ml.NewMultilocker()
+	m := ml.NewMultilocker()
 
-	l := ls.Lock([]ml.ResourceLock{ml.NewResourceLock(ml.LockTypeWrite, []string{"a"})})
-	l1 := ls.Lock([]ml.ResourceLock{ml.NewResourceLock(ml.LockTypeWrite, []string{"a"})})
+	l := m.Lock([]ml.ResourceLock{ml.NewResourceLock(ml.LockTypeWrite, []string{"a"})})
+	l1 := m.Lock([]ml.ResourceLock{ml.NewResourceLock(ml.LockTypeWrite, []string{"a"})})
 
 	assertLockIsWaiting(t, l1)
 
@@ -687,18 +687,18 @@ func TestLock_MultipleAcquires(t *testing.T) {
 }
 
 func TestReady_NoLockers(t *testing.T) {
-	ls := ml.NewMultilocker()
+	m := ml.NewMultilocker()
 
-	l := ls.Lock([]ml.ResourceLock{ml.NewResourceLock(ml.LockTypeWrite, []string{"a"})})
+	l := m.Lock([]ml.ResourceLock{ml.NewResourceLock(ml.LockTypeWrite, []string{"a"})})
 
 	<-l.Ready()
 }
 
 func TestReady_WithLockers(t *testing.T) {
-	ls := ml.NewMultilocker()
+	m := ml.NewMultilocker()
 
-	l := ls.Lock([]ml.ResourceLock{ml.NewResourceLock(ml.LockTypeWrite, []string{"a"})})
-	l1 := ls.Lock([]ml.ResourceLock{ml.NewResourceLock(ml.LockTypeWrite, []string{"a"})})
+	l := m.Lock([]ml.ResourceLock{ml.NewResourceLock(ml.LockTypeWrite, []string{"a"})})
+	l1 := m.Lock([]ml.ResourceLock{ml.NewResourceLock(ml.LockTypeWrite, []string{"a"})})
 
 	select {
 	case <-l1.Ready():
@@ -712,10 +712,10 @@ func TestReady_WithLockers(t *testing.T) {
 }
 
 func TestLock_PrefixAfterGroupWithFirstRead(t *testing.T) {
-	ls := ml.NewMultilocker()
+	m := ml.NewMultilocker()
 
-	l := ls.Lock([]ml.ResourceLock{ml.NewResourceLock(ml.LockTypeRead, []string{}), ml.NewResourceLock(ml.LockTypeWrite, []string{"c"})})
-	l1 := ls.Lock([]ml.ResourceLock{ml.NewResourceLock(ml.LockTypeRead, []string{})})
+	l := m.Lock([]ml.ResourceLock{ml.NewResourceLock(ml.LockTypeRead, []string{}), ml.NewResourceLock(ml.LockTypeWrite, []string{"c"})})
+	l1 := m.Lock([]ml.ResourceLock{ml.NewResourceLock(ml.LockTypeRead, []string{})})
 
 	l.Acquire()
 
@@ -723,25 +723,25 @@ func TestLock_PrefixAfterGroupWithFirstRead(t *testing.T) {
 }
 
 func TestLock_WriteAfterPostfixRead(t *testing.T) {
-	ls := ml.NewMultilocker()
+	m := ml.NewMultilocker()
 
-	l := ls.Lock([]ml.ResourceLock{ml.NewResourceLock(ml.LockTypeRead, []string{"a"})})
+	l := m.Lock([]ml.ResourceLock{ml.NewResourceLock(ml.LockTypeRead, []string{"a"})})
 	l.Acquire()
 
-	l1 := ls.Lock([]ml.ResourceLock{ml.NewResourceLock(ml.LockTypeRead, []string{"a"}), ml.NewResourceLock(ml.LockTypeWrite, []string{"a"})})
+	l1 := m.Lock([]ml.ResourceLock{ml.NewResourceLock(ml.LockTypeRead, []string{"a"}), ml.NewResourceLock(ml.LockTypeWrite, []string{"a"})})
 
 	assertLockIsWaiting(t, l1)
 }
 
 func TestLock_Complex_0(t *testing.T) {
-	ls := ml.NewMultilocker()
+	m := ml.NewMultilocker()
 
-	l := ls.Lock([]ml.ResourceLock{
+	l := m.Lock([]ml.ResourceLock{
 		ml.NewResourceLock(ml.LockTypeRead, []string{"1"}),
 	})
 	l.Acquire()
 
-	l1 := ls.Lock([]ml.ResourceLock{
+	l1 := m.Lock([]ml.ResourceLock{
 		ml.NewResourceLock(ml.LockTypeRead, []string{"1", "5"}),
 		ml.NewResourceLock(ml.LockTypeWrite, []string{"1", "2", "4", "1"}),
 	})
@@ -750,14 +750,14 @@ func TestLock_Complex_0(t *testing.T) {
 }
 
 func TestLock_Complex_1(t *testing.T) {
-	ls := ml.NewMultilocker()
+	m := ml.NewMultilocker()
 
-	l := ls.Lock([]ml.ResourceLock{
+	l := m.Lock([]ml.ResourceLock{
 		ml.NewResourceLock(ml.LockTypeWrite, []string{"2"}), // this should lock
 	})
 	l.Acquire()
 
-	l1 := ls.Lock([]ml.ResourceLock{
+	l1 := m.Lock([]ml.ResourceLock{
 		ml.NewResourceLock(ml.LockTypeRead, []string{"1"}),
 		ml.NewResourceLock(ml.LockTypeWrite, []string{"3"}),
 		ml.NewResourceLock(ml.LockTypeWrite, []string{}), // this should be locked
@@ -767,15 +767,15 @@ func TestLock_Complex_1(t *testing.T) {
 }
 
 func TestLock_Complex_2(t *testing.T) {
-	ls := ml.NewMultilocker()
+	m := ml.NewMultilocker()
 
-	l := ls.Lock([]ml.ResourceLock{
+	l := m.Lock([]ml.ResourceLock{
 		ml.NewResourceLock(ml.LockTypeWrite, []string{"2", "1"}), // this should lock
 		ml.NewResourceLock(ml.LockTypeRead, []string{"2"}),
 	})
 	l.Acquire()
 
-	l1 := ls.Lock([]ml.ResourceLock{
+	l1 := m.Lock([]ml.ResourceLock{
 		ml.NewResourceLock(ml.LockTypeRead, []string{"2"}),
 		ml.NewResourceLock(ml.LockTypeRead, []string{"2", "1", "1"}), // this should be locked
 	})
@@ -784,21 +784,21 @@ func TestLock_Complex_2(t *testing.T) {
 }
 
 func TestLock_Complex_3(t *testing.T) {
-	ls := ml.NewMultilocker()
+	m := ml.NewMultilocker()
 	order := sliceAppender.NewSliceAppender[int]()
 
 	lr1 := ml.NewResourceLock(ml.LockTypeRead, []string{"a"})
-	w1 := ls.Lock([]ml.ResourceLock{lr1})
+	w1 := m.Lock([]ml.ResourceLock{lr1})
 
 	lr2a := ml.NewResourceLock(ml.LockTypeWrite, []string{"a", "1"})
 	lr2b := ml.NewResourceLock(ml.LockTypeWrite, []string{"a", "2"})
-	w2 := ls.Lock([]ml.ResourceLock{lr2a, lr2b})
+	w2 := m.Lock([]ml.ResourceLock{lr2a, lr2b})
 
 	lr3a := ml.NewResourceLock(ml.LockTypeRead, []string{})
-	w3a := ls.Lock([]ml.ResourceLock{lr3a})
+	w3a := m.Lock([]ml.ResourceLock{lr3a})
 
 	lr3b := ml.NewResourceLock(ml.LockTypeRead, []string{"a", "3"})
-	w3b := ls.Lock([]ml.ResourceLock{lr3b})
+	w3b := m.Lock([]ml.ResourceLock{lr3b})
 
 	wg := sync.WaitGroup{}
 	wg.Add(4)
@@ -841,7 +841,7 @@ func TestLock_Complex_3(t *testing.T) {
 }
 
 func TestLock_Complex_4(t *testing.T) {
-	ls := ml.NewMultilocker()
+	m := ml.NewMultilocker()
 	order := sliceAppender.NewSliceAppender[int]()
 
 	wg := sync.WaitGroup{}
@@ -849,37 +849,37 @@ func TestLock_Complex_4(t *testing.T) {
 
 	// 1
 	r1 := ml.NewResourceLock(ml.LockTypeRead, []string{"a", "b", "c", "d"})
-	w1 := ls.Lock([]ml.ResourceLock{r1})
+	w1 := m.Lock([]ml.ResourceLock{r1})
 
 	// 2
 	r2 := ml.NewResourceLock(ml.LockTypeWrite, []string{"a", "b"})
-	w2 := ls.Lock([]ml.ResourceLock{r2})
+	w2 := m.Lock([]ml.ResourceLock{r2})
 
 	// 3 ...
 	r3 := ml.NewResourceLock(ml.LockTypeWrite, []string{"a", "b", "1", "a"})
-	w3 := ls.Lock([]ml.ResourceLock{r3})
+	w3 := m.Lock([]ml.ResourceLock{r3})
 
 	r4 := ml.NewResourceLock(ml.LockTypeWrite, []string{"a", "b", "1", "b"})
-	w4 := ls.Lock([]ml.ResourceLock{r4})
+	w4 := m.Lock([]ml.ResourceLock{r4})
 
 	r5 := ml.NewResourceLock(ml.LockTypeWrite, []string{"a", "b", "2", "a"})
-	w5 := ls.Lock([]ml.ResourceLock{r5})
+	w5 := m.Lock([]ml.ResourceLock{r5})
 
 	r6 := ml.NewResourceLock(ml.LockTypeWrite, []string{"a", "b", "2", "b"})
-	w6 := ls.Lock([]ml.ResourceLock{r6})
+	w6 := m.Lock([]ml.ResourceLock{r6})
 
 	// 4 ...
 	r7 := ml.NewResourceLock(ml.LockTypeRead, []string{})
-	w7 := ls.Lock([]ml.ResourceLock{r7})
+	w7 := m.Lock([]ml.ResourceLock{r7})
 
 	r8 := ml.NewResourceLock(ml.LockTypeRead, []string{"a", "b", "3"})
-	w8 := ls.Lock([]ml.ResourceLock{r8})
+	w8 := m.Lock([]ml.ResourceLock{r8})
 
 	r9 := ml.NewResourceLock(ml.LockTypeRead, []string{"a", "b", "3", "a"})
-	w9 := ls.Lock([]ml.ResourceLock{r9})
+	w9 := m.Lock([]ml.ResourceLock{r9})
 
 	r10 := ml.NewResourceLock(ml.LockTypeRead, []string{"a", "b", "3", "a", "b"})
-	w10 := ls.Lock([]ml.ResourceLock{r10})
+	w10 := m.Lock([]ml.ResourceLock{r10})
 
 	go func() {
 		u := w10.Acquire()
