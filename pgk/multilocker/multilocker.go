@@ -3,6 +3,7 @@ package multilocker
 import (
 	"sync"
 	"sync/atomic"
+	"time"
 	"unsafe"
 
 	dagLock "github.com/xshkut/distributed-lock/pgk/dag_lock"
@@ -477,14 +478,18 @@ func (ls *LockSpace) handleUnlocker(u Unlocker, vertexes []*dagLock.Vertex, reso
 		ls.releaseTokens(l.Path)
 	}
 
-	ls.mx.Unlock()
-
-	// Read Vertexes may still have parents. If so, we need to ensure they are unlocked before trying to clean the paths.
 	vw := dagLock.NewVertex(LockTypeWrite)
 
-	for _, v := range vertexesInUse {
-		v.AddChild(vw)
+	// Read Vertexes may still have parents. If so, we need to ensure they are unlocked before trying to clean the paths.
+	if len(vertexesInUse) > 0 {
+
+		for _, v := range vertexesInUse {
+			time.Sleep(time.Millisecond * 1)
+			v.AddChild(vw)
+		}
 	}
+
+	ls.mx.Unlock()
 
 	vw.Lock()
 	_ = 0 // get rid of "empty critical section" warning message
