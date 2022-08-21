@@ -51,7 +51,7 @@ func main() {
 
 	ch := make(chan struct{}, 1000)
 
-	ls := ml.NewLockSpace()
+	ls := ml.NewMultilocker()
 
 	for i := 0; i < concurrency; i++ {
 		go func() {
@@ -142,7 +142,7 @@ func simulateClient(ch chan struct{}) {
 		resources1 := getRandomResourceLockGroup()
 		resources2 := getRandomResourceLockGroup()
 
-		ls := ml.NewLockSpace()
+		ls := ml.NewMultilocker()
 		m := NewResourceMap()
 		unlocker := make(chan struct{})
 
@@ -157,7 +157,7 @@ func simulateClient(ch chan struct{}) {
 		unlocker <- struct{}{}
 		ls.Close()
 
-		ls = ml.NewLockSpace()
+		ls = ml.NewMultilocker()
 		m = NewResourceMap()
 		unlocker = make(chan struct{})
 
@@ -174,7 +174,7 @@ func simulateClient(ch chan struct{}) {
 	}
 }
 
-func lockAndCheckCollision(resources []ml.ResourceLock, ls *ml.LockSpace, m *ResourceMap, unlock <-chan struct{}) {
+func lockAndCheckCollision(resources []ml.ResourceLock, ls *ml.MultiLocker, m *ResourceMap, unlock <-chan struct{}) {
 	groupRef := new(int8)
 
 	lock := ls.Lock(resources)

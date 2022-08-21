@@ -91,7 +91,7 @@ func (cs ClientState) String() string {
 	return states[cs]
 }
 
-func handleCommunication(conn *websocket.Conn, ls *ml.LockSpace) (err error) {
+func handleCommunication(conn *websocket.Conn, ls *ml.MultiLocker) (err error) {
 	var l *ml.Lock
 	state := clientStateReady
 	ch := make(chan requestMessage)
