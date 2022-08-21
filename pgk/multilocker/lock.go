@@ -6,11 +6,9 @@ type Lock struct {
 	id int64
 }
 
-// Acquire waits until the lock is acquired and returns corresponding Unlocker.
-// You may think of it as the casual method Lock from sync.Mutex.
-// The reason why the name differs is that the lock actually starts its lifecycle within LockSpace.Lock() call.
+// Acquire waits until Lock is acquired and returns corresponding Unlocker.
 // Use the returned value to unlock the group.
-// It is possible to call Acquire() multiple times.
+// It is ok to call Acquire() multiple times, though it will not have further side effects.
 func (l Lock) Acquire() Unlocker {
 	<-l.ch
 
@@ -19,6 +17,7 @@ func (l Lock) Acquire() Unlocker {
 
 // Ready returns chan that signals when l is ready to be acquired.
 // It is safe to call Ready() multiple times.
+// Unlike Acquire(), Ready() can be used with "select" statement.
 func (l Lock) Ready() <-chan struct{} {
 	return l.ch
 }
@@ -33,6 +32,8 @@ func (l *Lock) makeReady(u Unlocker) {
 	close(l.ch)
 }
 
+// Unlocker is used to release the lock acquired by Lock().
+// Use NewUnlocker() to create new Unlocker.
 type Unlocker struct {
 	ch chan chan struct{}
 }
@@ -43,8 +44,8 @@ func NewUnlocker() Unlocker {
 	}
 }
 
-// Unlock unlocks to Lock and returns after it is completely unlocked, though the descendent Lock is no guaranteed to be ready at that time.
-// Do not call Unlock() multiple times.
+// Unlock unlocks Lock and returns after it is completely unlocked, though there is no guarantee that the descendent Lock is ready to be acquired at that time.
+// Do not call Unlock() more than once.
 func (u Unlocker) Unlock() {
 	unlockProcessed := make(chan struct{})
 	u.ch <- unlockProcessed
