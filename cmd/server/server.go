@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	// internal
+	ns "github.com/xshkut/gearlock/internal/namespace"
 )
 
 const numberOfPosixSignals = 28
@@ -38,7 +40,7 @@ func main() {
 	}
 
 	mainLogger.Info("Waiting for existing locks to be released...")
-	<-closeNamespaces()
+	<-ns.CloseNamespaces()
 
 	mainLogger.Info("Closing HTTP server...")
 	server.Close()
@@ -94,7 +96,11 @@ func listen(server http.Server) <-chan error {
 			for {
 				time.Sleep(time.Duration(statInterval) * time.Second)
 
-				printStatistics()
+				statsList := ns.GetStatistics()
+
+				for _, stats := range statsList {
+					mainLogger.Infof("Multilocker namespace: %s. Statistics: %+v", stats.Name, stats.Stats)
+				}
 			}
 		}()
 	}
@@ -104,7 +110,7 @@ func listen(server http.Server) <-chan error {
 	ch := make(chan error)
 
 	go func() {
-		ch <- fmt.Errorf("HTTP listener error", server.ListenAndServe())
+		ch <- fmt.Errorf("HTTP listener error: %w", server.ListenAndServe())
 	}()
 
 	return ch
@@ -116,14 +122,15 @@ func greetingsHandler(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(fmt.Sprintf("%s\te.g. %s\n", apiHandler.version, apiHandler.connStrExample)))
 	}
 
+	namespaces := ns.GetNamespaces()
 	if len(namespaces) == 0 {
 		w.Write([]byte("\nNo opened namespaces\n"))
 		return
 	}
 
 	w.Write([]byte("\nOpened namespaces:\n"))
-	for name := range namespaces {
-		w.Write([]byte(fmt.Sprintf("%s\n", name)))
+	for _, ns := range namespaces {
+		w.Write([]byte(fmt.Sprintf("%s\n", ns.Name)))
 	}
 }
 

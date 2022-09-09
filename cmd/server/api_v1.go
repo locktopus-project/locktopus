@@ -9,6 +9,7 @@ import (
 
 	"github.com/gorilla/websocket"
 
+	ns "github.com/xshkut/gearlock/internal/namespace"
 	ml "github.com/xshkut/gearlock/pkg/multilocker"
 )
 
@@ -40,7 +41,12 @@ func apiV1Handler(w http.ResponseWriter, r *http.Request) {
 
 	apiLogger.Infof("New connection from %s [id = %d]", conn.RemoteAddr(), connID)
 
-	err = handleCommunication(conn, getMultilockerInstance(namespace), connID)
+	ns, created := ns.GetMultilockerInstance(namespace)
+	if created {
+		mainLogger.Infof("Created new multilocker namespace %s", namespace)
+	}
+
+	err = handleCommunication(conn, ns, connID)
 
 	if err != nil {
 		conn.WriteMessage(websocket.TextMessage, []byte(fmt.Errorf("communication error: %w", err).Error()))
@@ -238,7 +244,7 @@ func makeResourceLocks(resources []resource) ([]ml.ResourceLock, error) {
 	for i, r := range resources {
 		lt, err := parseLockType(r.T)
 		if err != nil {
-			return nil, fmt.Errorf("cannot build resource lock", err)
+			return nil, fmt.Errorf("cannot build resource lock: %w", err)
 		}
 
 		resourceLocks[i] = ml.NewResourceLock(lt, r.Path)

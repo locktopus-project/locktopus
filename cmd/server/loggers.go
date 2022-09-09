@@ -11,7 +11,7 @@ type wrappedLogger struct {
 	l       *golog.Logger
 }
 
-func NewWrapperLogger() wrappedLogger {
+func NewWrappedLogger() wrappedLogger {
 	l := golog.New(os.Stdout)
 
 	l.WithDebug()
@@ -74,6 +74,6 @@ func (l *wrappedLogger) Errorf(format string, args ...interface{}) {
 	l.l.Errorf(format, args...)
 }
 
-var mainLogger = NewWrapperLogger()
-var apiLogger = NewWrapperLogger()
-var lockLogger = NewWrapperLogger()
+var mainLogger = NewWrappedLogger()
+var apiLogger = NewWrappedLogger()
+var lockLogger = NewWrappedLogger()
