@@ -4,7 +4,6 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"math/rand"
 	"time"
@@ -19,12 +18,10 @@ const maxGroupSize = 3
 const concurrency = 1000
 const maxLockDurationMs = 1
 
-func init() {
-	flag.Parse()
-}
-
 func main() {
 	ch := make(chan struct{}, 1000)
+
+	fmt.Println("Starting simulation")
 
 	for i := 0; i < concurrency; i++ {
 		go func() {
@@ -170,18 +167,4 @@ func getRandomResourceLockGroup() []ml.ResourceLock {
 	}
 
 	return result
-}
-
-func ByteCountIEC(b int64) string {
-	const unit = 1024
-	if b < unit {
-		return fmt.Sprintf("%d B", b)
-	}
-	div, exp := int64(unit), 0
-	for n := b / unit; n >= unit; n /= unit {
-		div *= unit
-		exp++
-	}
-	return fmt.Sprintf("%.1f %ciB",
-		float64(b)/float64(div), "KMGTPE"[exp])
 }
