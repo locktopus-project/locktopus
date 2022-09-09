@@ -1,0 +1,19 @@
+version: "3.9"
+services:
+  server:
+    build:
+      context: ../../
+      dockerfile: Dockerfile
+    environment:
+      - GEARLOCK_PORT=9009
+      - GEARLOCK_HOST=0.0.0.0
+      - GEARLOCK_STOP_AFTER=30
+  v1:
+    build:
+      context: ../../
+      dockerfile: docker/e2e/v1.Dockerfile
+    environment:
+      - SERVER_HOST=server
+      - SERVER_PORT=9009
+    depends_on:
+      - server

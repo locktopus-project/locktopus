@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -18,7 +19,7 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
-const invalidInput = 3000
+const invalidInputCode = 3000
 
 func apiV1Handler(w http.ResponseWriter, r *http.Request) {
 	namespace := r.URL.Query().Get("namespace")
@@ -31,25 +32,27 @@ func apiV1Handler(w http.ResponseWriter, r *http.Request) {
 
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		internal.WrapErrorPrint(err, "upgrade error")
+		apiLogger.Error(internal.WrapErrorAppend(err, "upgrade error"))
 		return
 	}
 	defer conn.Close()
 
-	internal.Logger.Infof("New connection from %s", conn.RemoteAddr())
+	connID := atomic.AddInt64(&lastConnID, 1)
 
-	err = handleCommunication(conn, getMultilockerInstance(namespace))
+	apiLogger.Infof("New connection from %s [id = %d]", conn.RemoteAddr(), connID)
+
+	err = handleCommunication(conn, getMultilockerInstance(namespace), connID)
 
 	if err != nil {
-		conn.WriteMessage(websocket.TextMessage, []byte(internal.WrapError(err, "Communication error").Error()))
-		conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(invalidInput, ""), time.Now().Add(time.Second))
+		conn.WriteMessage(websocket.TextMessage, []byte(internal.WrapErrorAppend(err, "Communication error").Error()))
+		conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(invalidInputCode, ""), time.Now().Add(time.Second))
 
-		internal.Logger.Infof("Connection errored: %s", err)
+		apiLogger.Infof("Connection closed [id = %d]: %s", connID, err.Error())
 
 		return
 	}
 
-	internal.Logger.Infof("Closing errored connection: %s", err)
+	apiLogger.Infof("Closing connection [id = %d]: %s", connID, err)
 
 	conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""), time.Now().Add(time.Second))
 }
@@ -62,7 +65,7 @@ const (
 )
 
 type requestMessage struct {
-	Action    action     `json:"action"` // enqueue, unlock
+	Action    action     `json:"action"`
 	Resources []resource `json:"resources,omitempty"`
 }
 
@@ -73,7 +76,7 @@ type resource struct {
 
 type responseMessage struct {
 	ID     string `json:"id"`
-	Action action `json:"action"` // enqueue, acquire, unlock
+	Action action `json:"action"`
 	State  string `json:"state"`
 }
 
@@ -91,24 +94,33 @@ func (cs ClientState) String() string {
 	return states[cs]
 }
 
-func handleCommunication(conn *websocket.Conn, ls *ml.MultiLocker) (err error) {
+func readMessages(conn *websocket.Conn, ch chan<- requestMessage) (err error) {
+	cm := requestMessage{}
+
+	for {
+		if err = conn.ReadJSON(&cm); err != nil {
+			break
+		}
+
+		ch <- cm
+	}
+
+	return err
+}
+
+func handleCommunication(conn *websocket.Conn, ls *ml.MultiLocker, connID int64) (err error) {
+	var readErr error
 	var l *ml.Lock
+	var id int64
 	state := clientStateReady
 	ch := make(chan requestMessage)
 
-	var readErr error
 	go func() {
-		for {
-			cm := &requestMessage{}
-
-			if readErr = conn.ReadJSON(cm); readErr != nil {
-				close(ch)
-				break
-			}
-
-			ch <- *cm
-		}
+		readErr = readMessages(conn, ch)
+		close(ch)
 	}()
+
+	var resourceLocks []ml.ResourceLock
 
 	for {
 		incm := requestMessage{}
@@ -121,7 +133,7 @@ func handleCommunication(conn *websocket.Conn, ls *ml.MultiLocker) (err error) {
 				state = clientStateAcquired
 
 				if err != conn.WriteJSON(responseMessage{ID: fmt.Sprintf("%d", l.ID()), Action: actionLock, State: state.String()}) {
-					err = internal.WrapError(err, "Cannot send JSON message")
+					err = internal.WrapErrorAppend(err, "Cannot send JSON message")
 				}
 
 			case incm, opened = <-ch:
@@ -145,14 +157,19 @@ func handleCommunication(conn *websocket.Conn, ls *ml.MultiLocker) (err error) {
 		}
 
 		if incm.Action == actionLock {
-			var resourceLocks []ml.ResourceLock
 			resourceLocks, err = makeResourceLocks(incm.Resources)
 			if err != nil {
 				break
 			}
 
+			lockLogger.Infof("Locking resources for connection [id = %d]: %v...", connID, resourceLocks)
+
 			newLock := ls.Lock(resourceLocks)
+
+			lockLogger.Infof("Locked resources for connection [id = %d]: %v", connID, resourceLocks)
+
 			l = &newLock
+			id = l.ID()
 
 			select {
 			case <-l.Ready():
@@ -161,22 +178,26 @@ func handleCommunication(conn *websocket.Conn, ls *ml.MultiLocker) (err error) {
 				state = clientStateEnqueued
 			}
 
-			if err != conn.WriteJSON(responseMessage{ID: fmt.Sprintf("%d", l.ID()), Action: incm.Action, State: state.String()}) {
-				err = internal.WrapError(err, "Cannot send JSON message")
+			if err != conn.WriteJSON(responseMessage{ID: fmt.Sprintf("%d", id), Action: incm.Action, State: state.String()}) {
+				err = internal.WrapErrorAppend(err, "Cannot send JSON message")
 				break
 			}
 
 			continue
 		}
 
-		// actionRelease
+		go func(l *ml.Lock) {
+			l.Acquire().Unlock()
+		}(l)
 
-		go l.Acquire().Unlock()
+		l = nil
+
+		lockLogger.Infof("Released resources for connection [id = %d]: %v", connID, resourceLocks)
 
 		state = clientStateReady
 
-		if err != conn.WriteJSON(responseMessage{ID: fmt.Sprintf("%d", l.ID()), Action: incm.Action, State: state.String()}) {
-			err = internal.WrapError(err, "Cannot send JSON message")
+		if err != conn.WriteJSON(responseMessage{ID: fmt.Sprintf("%d", id), Action: incm.Action, State: state.String()}) {
+			err = internal.WrapErrorAppend(err, "Cannot send JSON message")
 			break
 		}
 
@@ -218,7 +239,7 @@ func makeResourceLocks(resources []resource) ([]ml.ResourceLock, error) {
 	for i, r := range resources {
 		lt, err := parseLockType(r.T)
 		if err != nil {
-			return nil, internal.WrapError(err, "Cannot build resource lock")
+			return nil, internal.WrapErrorAppend(err, "Cannot build resource lock")
 		}
 
 		resourceLocks[i] = ml.NewResourceLock(lt, r.Path)

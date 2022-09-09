@@ -1,1 +1,1 @@
-go build -o ./bin/server ./cmd/server && chmod +x ./bin/server && DOCUMENTATION_LINK=www.google.com ./bin/server 
+go build -o ./bin/server ./cmd/server && ./bin/server
