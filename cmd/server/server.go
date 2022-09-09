@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
-	internal "github.com/xshkut/gearlock/internal/utils"
 )
 
 const numberOfPosixSignals = 28
@@ -105,7 +104,7 @@ func listen(server http.Server) <-chan error {
 	ch := make(chan error)
 
 	go func() {
-		ch <- internal.WrapErrorAppend(server.ListenAndServe(), "HTTP listener error")
+		ch <- fmt.Errorf("HTTP listener error", server.ListenAndServe())
 	}()
 
 	return ch

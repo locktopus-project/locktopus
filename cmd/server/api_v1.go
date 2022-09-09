@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	internal "github.com/xshkut/gearlock/internal/utils"
 
 	ml "github.com/xshkut/gearlock/pkg/multilocker"
 )
@@ -32,7 +31,7 @@ func apiV1Handler(w http.ResponseWriter, r *http.Request) {
 
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		apiLogger.Error(internal.WrapErrorAppend(err, "upgrade error"))
+		apiLogger.Error(fmt.Errorf("upgrade error: %w", err))
 		return
 	}
 	defer conn.Close()
@@ -44,7 +43,7 @@ func apiV1Handler(w http.ResponseWriter, r *http.Request) {
 	err = handleCommunication(conn, getMultilockerInstance(namespace), connID)
 
 	if err != nil {
-		conn.WriteMessage(websocket.TextMessage, []byte(internal.WrapErrorAppend(err, "Communication error").Error()))
+		conn.WriteMessage(websocket.TextMessage, []byte(fmt.Errorf("communication error: %w", err).Error()))
 		conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(invalidInputCode, ""), time.Now().Add(time.Second))
 
 		apiLogger.Infof("Connection closed [id = %d]: %s", connID, err.Error())
@@ -133,7 +132,7 @@ func handleCommunication(conn *websocket.Conn, ls *ml.MultiLocker, connID int64)
 				state = clientStateAcquired
 
 				if err != conn.WriteJSON(responseMessage{ID: fmt.Sprintf("%d", l.ID()), Action: actionLock, State: state.String()}) {
-					err = internal.WrapErrorAppend(err, "Cannot send JSON message")
+					err = fmt.Errorf("cannot send JSON message: %w", err)
 				}
 
 			case incm, opened = <-ch:
@@ -179,7 +178,7 @@ func handleCommunication(conn *websocket.Conn, ls *ml.MultiLocker, connID int64)
 			}
 
 			if err != conn.WriteJSON(responseMessage{ID: fmt.Sprintf("%d", id), Action: incm.Action, State: state.String()}) {
-				err = internal.WrapErrorAppend(err, "Cannot send JSON message")
+				err = fmt.Errorf("cannot send JSON message: %w", err)
 				break
 			}
 
@@ -197,7 +196,7 @@ func handleCommunication(conn *websocket.Conn, ls *ml.MultiLocker, connID int64)
 		state = clientStateReady
 
 		if err != conn.WriteJSON(responseMessage{ID: fmt.Sprintf("%d", id), Action: incm.Action, State: state.String()}) {
-			err = internal.WrapErrorAppend(err, "Cannot send JSON message")
+			err = fmt.Errorf("cannot send JSON message: %w", err)
 			break
 		}
 
@@ -239,7 +238,7 @@ func makeResourceLocks(resources []resource) ([]ml.ResourceLock, error) {
 	for i, r := range resources {
 		lt, err := parseLockType(r.T)
 		if err != nil {
-			return nil, internal.WrapErrorAppend(err, "Cannot build resource lock")
+			return nil, fmt.Errorf("cannot build resource lock", err)
 		}
 
 		resourceLocks[i] = ml.NewResourceLock(lt, r.Path)
