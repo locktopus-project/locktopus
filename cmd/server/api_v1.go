@@ -9,6 +9,7 @@ import (
 
 	"github.com/gorilla/websocket"
 
+	"github.com/xshkut/gearlock/internal/constants"
 	ns "github.com/xshkut/gearlock/internal/namespace"
 	ml "github.com/xshkut/gearlock/pkg/multilocker"
 )
@@ -22,10 +23,10 @@ var upgrader = websocket.Upgrader{
 const invalidInputCode = 3000
 
 func apiV1Handler(w http.ResponseWriter, r *http.Request) {
-	namespace := r.URL.Query().Get("namespace")
+	namespace := r.URL.Query().Get(constants.NamespaceQueryParameterName)
 
 	if namespace == "" {
-		w.Write([]byte("URL parameter 'namespace' is required"))
+		w.Write([]byte(fmt.Sprintf("URL parameter '%s' is required", constants.NamespaceQueryParameterName)))
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}

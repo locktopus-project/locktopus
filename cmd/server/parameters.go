@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	f "github.com/jessevdk/go-flags"
+	constants "github.com/xshkut/gearlock/internal/constants"
 )
 
 var port string
@@ -39,8 +40,8 @@ func parseArguments() {
 		os.Exit(0)
 	}
 
-	port = resolveStringParameter(arguments.Port, "PORT", "9009")
-	hostname = resolveStringParameter(arguments.Host, "HOST", "0.0.0.0")
+	port = resolveStringParameter(arguments.Port, "PORT", constants.DefaultServerPort)
+	hostname = resolveStringParameter(arguments.Host, "HOST", constants.DefaultServerHost)
 
 	if resolveBoolParameter(arguments.LogClients, "LOG_CLIENTS", false) {
 		apiLogger.Disable()
@@ -77,10 +78,8 @@ func parseArguments() {
 	}
 }
 
-const envPrefix = "GEARLOCK_"
-
 func getEnvVar(name string) string {
-	if e := os.Getenv(fmt.Sprintf("%v%s", envPrefix, name)); e != "" {
+	if e := os.Getenv(fmt.Sprintf("%v%s", constants.EnvPrefix, name)); e != "" {
 		return e
 	}
 

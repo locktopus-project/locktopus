@@ -2,16 +2,18 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 
+	"github.com/xshkut/gearlock/internal/constants"
 	ns "github.com/xshkut/gearlock/internal/namespace"
 )
 
 func statsV1Handler(w http.ResponseWriter, r *http.Request) {
-	nsParam := r.URL.Query().Get("namespace")
+	nsParam := r.URL.Query().Get(constants.NamespaceQueryParameterName)
 
 	if nsParam == "" {
-		w.Write([]byte("URL parameter 'namespace' is required"))
+		w.Write([]byte(fmt.Sprintf("URL parameter '%s' is required", constants.NamespaceQueryParameterName)))
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
