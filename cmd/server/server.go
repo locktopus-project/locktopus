@@ -82,6 +82,11 @@ var apiHandlers = []apiHandler{
 		handler:        apiV1Handler,
 		connStrExample: "ws://host:port/v1?namespace=default",
 	},
+	{
+		version:        "/stats_v1",
+		handler:        statsV1Handler,
+		connStrExample: "http://host:port/stats_v1?namespace=default",
+	},
 }
 
 var lastConnID int64 = -1

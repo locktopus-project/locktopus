@@ -204,3 +204,43 @@ func TestClient_CloseShouldRelease(t *testing.T) {
 
 	waiter.Close()
 }
+
+func TestClient_AfterReleaseShouldLock(t *testing.T) {
+	locker, err := gearlockclient.MakeGearlockClient(gearlockclient.ConnectionOptions{
+		Url: fmt.Sprintf("ws://%s:%s/v1?namespace=123", serverHost, serverPort),
+	})
+
+	if err != nil {
+		t.Fatalf("cannot connect to Gearlock server: %s", err)
+		return
+	}
+
+	locker.AddLockResource(gearlockclient.LockTypeWrite, "test4")
+
+	if err = locker.Lock(); err != nil {
+		t.Fatalf("cannot lock: %s", err)
+		return
+	}
+
+	if !locker.IsAcquired() {
+		t.Fatalf("locker's lock should be acquired")
+		return
+	}
+
+	if err = locker.Release(); err != nil {
+		t.Fatalf("cannot release: %s", err)
+		return
+	}
+
+	if err = locker.Lock(); err != nil {
+		t.Fatalf("cannot lock: %s", err)
+		return
+	}
+
+	if !locker.IsAcquired() {
+		t.Fatalf("locker's lock should be acquired")
+		return
+	}
+
+	locker.Close()
+}

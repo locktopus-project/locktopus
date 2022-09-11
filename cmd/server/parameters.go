@@ -79,8 +79,8 @@ func parseArguments() {
 
 const envPrefix = "GEARLOCK_"
 
-func getEnvVar(envVar string) string {
-	if e := os.Getenv(fmt.Sprintf("%v%s", envPrefix, envVar)); e != "" {
+func getEnvVar(name string) string {
+	if e := os.Getenv(fmt.Sprintf("%v%s", envPrefix, name)); e != "" {
 		return e
 	}
 

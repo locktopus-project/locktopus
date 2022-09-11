@@ -41,7 +41,7 @@ func apiV1Handler(w http.ResponseWriter, r *http.Request) {
 
 	apiLogger.Infof("New connection from %s [id = %d]", conn.RemoteAddr(), connID)
 
-	ns, created := ns.GetMultilockerInstance(namespace)
+	ns, created := ns.GetNamespace(namespace)
 	if created {
 		mainLogger.Infof("Created new multilocker namespace %s", namespace)
 	}

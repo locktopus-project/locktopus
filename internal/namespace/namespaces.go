@@ -28,19 +28,19 @@ func GetNamespaces() []NamespaceEntry {
 	return list
 }
 
-func GetMultilockerInstance(name string) (*ml.MultiLocker, bool) {
-	var ls *ml.MultiLocker
+func GetNamespace(name string) (*ml.MultiLocker, bool) {
+	var ns *ml.MultiLocker
 	var ok bool
 
 	mx.Lock()
 	defer mx.Unlock()
 
-	if ls, ok = namespaces[name]; !ok {
-		ls = ml.NewMultilocker()
-		namespaces[name] = ls
+	if ns, ok = namespaces[name]; !ok {
+		ns = ml.NewMultilocker()
+		namespaces[name] = ns
 	}
 
-	return ls, !ok
+	return ns, !ok
 }
 
 type NamespaceStatistics struct {
@@ -61,6 +61,18 @@ func GetStatistics() []NamespaceStatistics {
 	}
 
 	return list
+}
+
+func GetNamespaceStatistics(name string) *ml.MultilockerStatistics {
+	mx.Lock()
+	defer mx.Unlock()
+
+	if ns, ok := namespaces[name]; ok {
+		stats := ns.Statistics()
+		return &stats
+	}
+
+	return nil
 }
 
 func CloseNamespaces() <-chan struct{} {
