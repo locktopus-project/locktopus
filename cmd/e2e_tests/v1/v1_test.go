@@ -49,7 +49,6 @@ func TestClient_MakeGearlockClient_ByParams(t *testing.T) {
 		Namespace: "123",
 		Host:      serverHost,
 		Port:      portNumber,
-		Version:   "v1",
 		Secure:    false,
 	})
 

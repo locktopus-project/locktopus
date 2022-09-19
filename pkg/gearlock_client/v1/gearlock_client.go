@@ -20,7 +20,6 @@ type ConnectionOptions struct {
 	Host      string
 	Port      int
 	Namespace string
-	Version   string // e.g. "v1"
 	Secure    bool
 }
 
@@ -30,6 +29,8 @@ const (
 	LockTypeRead  = ml.LockTypeRead
 	LockTypeWrite = ml.LockTypeWrite
 )
+
+const version = "v1"
 
 // MakeGearlockClient establishes a connection to the Gearlock server and returns GearlockClient.
 func MakeGearlockClient(options ConnectionOptions) (*GearlockClient, error) {
@@ -43,8 +44,6 @@ func MakeGearlockClient(options ConnectionOptions) (*GearlockClient, error) {
 			return nil, fmt.Errorf("port is required")
 		case options.Namespace == "":
 			return nil, fmt.Errorf("namespace is required")
-		case options.Version == "":
-			return nil, fmt.Errorf("version is required")
 		}
 
 		s := ""
@@ -52,7 +51,7 @@ func MakeGearlockClient(options ConnectionOptions) (*GearlockClient, error) {
 			s = "s"
 		}
 
-		url = fmt.Sprintf("ws%s://%s:%d/%s?namespace=%s", s, options.Host, options.Port, options.Version, options.Namespace)
+		url = fmt.Sprintf("ws%s://%s:%d/%s?namespace=%s", s, options.Host, options.Port, version, options.Namespace)
 	}
 
 	conn, _, err := websocket.DefaultDialer.Dial(url, nil)
