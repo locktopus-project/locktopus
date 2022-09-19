@@ -86,6 +86,37 @@ func TestClient_ImmediateAcquireOnLock(t *testing.T) {
 	client.Close()
 }
 
+func TestClient_LockID(t *testing.T) {
+	client, err := gearlockclient.MakeGearlockClient(gearlockclient.ConnectionOptions{
+		Url: fmt.Sprintf("ws://%s:%s/v1?namespace=123", serverHost, serverPort),
+	})
+
+	if err != nil {
+		t.Fatalf("cannot connect to Gearlock server: %s", err)
+		return
+	}
+
+	client.AddLockResource(gearlockclient.LockTypeWrite, "testLockId")
+
+	err = client.Lock()
+	if err != nil {
+		t.Fatalf("cannot lock: %s", err)
+		return
+	}
+
+	if !client.IsAcquired() {
+		t.Fatalf("client should have acquired the lock")
+		return
+	}
+
+	if client.LockID() == "" {
+		t.Fatalf("client should have lock id")
+		return
+	}
+
+	client.Close()
+}
+
 func TestClient_SequentialAcquire(t *testing.T) {
 	locker, err := gearlockclient.MakeGearlockClient(gearlockclient.ConnectionOptions{
 		Url: fmt.Sprintf("ws://%s:%s/v1?namespace=123", serverHost, serverPort),

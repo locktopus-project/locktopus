@@ -13,6 +13,7 @@ type GearlockClient struct {
 	conn     *websocket.Conn
 	lr       []resource
 	acquired bool
+	lockID   string
 }
 
 type ConnectionOptions struct {
@@ -109,6 +110,7 @@ func (c *GearlockClient) Lock() (err error) {
 	}
 
 	c.acquired = response.State == "acquired"
+	c.lockID = response.ID
 
 	return nil
 }
@@ -116,6 +118,10 @@ func (c *GearlockClient) Lock() (err error) {
 // IsAcquired returns true if last Lock() has been acquired, so there is no need to call Acquire()
 func (c *GearlockClient) IsAcquired() bool {
 	return c.acquired
+}
+
+func (c *GearlockClient) LockID() string {
+	return c.lockID
 }
 
 // Acquire is used to wait until the lock is acquired. If IsAcquired() returns true after calling Lock(), calling Acquire() is no-op.
