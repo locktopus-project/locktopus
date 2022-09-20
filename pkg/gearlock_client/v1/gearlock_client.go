@@ -109,6 +109,10 @@ func (c *GearlockClient) Lock() (err error) {
 		return fmt.Errorf("unexpected state 'ready' returned from server after Lock()")
 	}
 
+	if response.Action != actionLock {
+		return fmt.Errorf("unexpected response action returned from server: %s", response.Action)
+	}
+
 	c.acquired = response.State == "acquired"
 	c.lockID = response.ID
 
@@ -140,6 +144,10 @@ func (c *GearlockClient) Acquire() (err error) {
 		return fmt.Errorf("unexpected state '%s' returned from server when waiting for acquire", response.State)
 	}
 
+	if response.Action != actionLock {
+		return fmt.Errorf("unexpected response action returned from server: %s", response.Action)
+	}
+
 	c.acquired = true
 
 	return nil
@@ -160,8 +168,19 @@ func (c *GearlockClient) Release() (err error) {
 		return fmt.Errorf("cannot read response: %s", err)
 	}
 
+	if response.Action == actionLock && response.State == "acquired" && response.ID == c.lockID {
+		// This is the response to the previous Lock() call and should be ignored.
+		if err = c.conn.ReadJSON(&response); err != nil {
+			return fmt.Errorf("cannot read response: %s", err)
+		}
+	}
+
 	if response.State != "ready" {
 		return fmt.Errorf("unexpected state '%s' returned from server when waiting for release", response.State)
+	}
+
+	if response.Action != actionRelease {
+		return fmt.Errorf("unexpected response action returned from server: %s", response.Action)
 	}
 
 	c.acquired = false
