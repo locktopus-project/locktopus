@@ -110,7 +110,7 @@ func listen(server http.Server) <-chan error {
 		}()
 	}
 
-	mainLogger.Info("Starting listening on ", server.Addr)
+	mainLogger.Info("Starting listening on", server.Addr)
 
 	ch := make(chan error)
 
