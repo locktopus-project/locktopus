@@ -8,7 +8,9 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
+
 	// internal
 	ns "github.com/xshkut/gearlock/internal/namespace"
 )
@@ -39,8 +41,14 @@ func main() {
 		mainLogger.Info("Server TTL exceeded")
 	}
 
-	mainLogger.Info("Waiting for existing locks to be released...")
-	<-ns.CloseNamespaces()
+	mainLogger.Info("Waiting for existing locks to be released... Send SIGINT or SIGTERM again to force exit")
+	select {
+	case <-ns.CloseNamespaces():
+		mainLogger.Info("All namespaces have been closed")
+	case s := <-getSignals():
+		mainLogger.Infof("Received signal: %s", s)
+		exitCode = 1
+	}
 
 	mainLogger.Info("Closing HTTP server...")
 	server.Close()
@@ -70,7 +78,7 @@ func makeServer(hostname string, port string, apiHandlers []apiHandler) http.Ser
 		WriteTimeout: time.Second * 15,
 		ReadTimeout:  time.Second * 15,
 		IdleTimeout:  time.Second * 60,
-		Handler:      r,
+		Handler:      handlers.CORS()(r),
 	}
 
 	return server
@@ -92,10 +100,6 @@ var apiHandlers = []apiHandler{
 var lastConnID int64 = -1
 
 func listen(server http.Server) <-chan error {
-	r := mux.NewRouter()
-
-	r.HandleFunc("/", greetingsHandler)
-
 	if statInterval > 0 {
 		go func() {
 			for {
