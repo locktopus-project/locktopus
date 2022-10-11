@@ -1,6 +1,7 @@
 package gearlockclient
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -10,10 +11,12 @@ import (
 
 // GearlockClient is a client for Gearlock server. Use MakeGearlockClient to instantiate one and connect.
 type GearlockClient struct {
-	conn     *websocket.Conn
-	lr       []resource
-	acquired bool
-	lockID   string
+	conn      *websocket.Conn
+	lr        []resource
+	acquired  bool
+	lockID    string
+	responses chan result
+	released  chan struct{}
 }
 
 type ConnectionOptions struct {
@@ -60,9 +63,16 @@ func MakeGearlockClient(options ConnectionOptions) (*GearlockClient, error) {
 		return nil, fmt.Errorf("cannot dial to Gearlock server: %s", err)
 	}
 
-	return &GearlockClient{
+	gc := GearlockClient{
 		conn: conn,
-	}, nil
+	}
+
+	gc.responses = make(chan result)
+	go gc.readResponses(gc.responses)
+
+	gc.released = make(chan struct{}, 1)
+
+	return &gc, nil
 }
 
 const closeMessage = "close"
@@ -90,6 +100,11 @@ func (c *GearlockClient) AddLockResource(lockType LockType, resources ...string)
 
 // Lock locks added resources. Use IsAcquired() to check if lock has been acquired.
 func (c *GearlockClient) Lock() (err error) {
+	select {
+	case <-c.released:
+	default:
+	}
+
 	var response responseMessage
 	msg := requestMessage{
 		Action:    actionLock,
@@ -101,7 +116,10 @@ func (c *GearlockClient) Lock() (err error) {
 		return fmt.Errorf("cannot write request: %s", err)
 	}
 
-	if err = c.conn.ReadJSON(&response); err != nil {
+	res := <-c.responses
+	response = res.data
+	err = res.err
+	if err != nil {
 		return fmt.Errorf("cannot read response: %s", err)
 	}
 
@@ -128,6 +146,9 @@ func (c *GearlockClient) LockID() string {
 	return c.lockID
 }
 
+var ErrReleasedBeforeAcquired = errors.New("cannot release lock before it has been locked")
+var ErrUnexpectedResponse = errors.New("unexpected response")
+
 // Acquire is used to wait until the lock is acquired. If IsAcquired() returns true after calling Lock(), calling Acquire() is no-op.
 func (c *GearlockClient) Acquire() (err error) {
 	var response responseMessage
@@ -136,8 +157,25 @@ func (c *GearlockClient) Acquire() (err error) {
 		return nil
 	}
 
-	if err = c.conn.ReadJSON(&response); err != nil {
+	var res result
+	select {
+	case res = <-c.responses:
+	case <-c.released:
+		return ErrReleasedBeforeAcquired
+	}
+
+	response = res.data
+	err = res.err
+	if err != nil {
 		return fmt.Errorf("cannot read response: %s", err)
+	}
+
+	if response.ID != c.lockID {
+		return ErrUnexpectedResponse
+	}
+
+	if response.State == "released" && response.Action == "release" {
+		return ErrUnexpectedResponse
 	}
 
 	if response.State != "acquired" {
@@ -155,6 +193,8 @@ func (c *GearlockClient) Acquire() (err error) {
 
 // Release releases the lock. After that you may call AddLockResource() and Lock() again.
 func (c *GearlockClient) Release() (err error) {
+	c.released <- struct{}{}
+
 	var response responseMessage
 	msg := requestMessage{
 		Action: actionRelease,
@@ -164,15 +204,21 @@ func (c *GearlockClient) Release() (err error) {
 		return fmt.Errorf("cannot write request: %s", err)
 	}
 
-	if err = c.conn.ReadJSON(&response); err != nil {
-		return fmt.Errorf("cannot read response: %s", err)
+	res := <-c.responses
+	if res.err != nil {
+		return fmt.Errorf("cannot read response: %s", res.err)
 	}
+
+	response = res.data
 
 	if response.Action == actionLock && response.State == "acquired" && response.ID == c.lockID {
 		// This is the response to the previous Lock() call and should be ignored.
-		if err = c.conn.ReadJSON(&response); err != nil {
-			return fmt.Errorf("cannot read response: %s", err)
+		res := <-c.responses
+		if res.err != nil {
+			return fmt.Errorf("cannot read response: %s", res.err)
 		}
+
+		response = res.data
 	}
 
 	if response.State != "ready" {
@@ -186,4 +232,29 @@ func (c *GearlockClient) Release() (err error) {
 	c.acquired = false
 
 	return nil
+}
+
+type result struct {
+	data responseMessage
+	err  error
+}
+
+func (c *GearlockClient) readResponses(ch chan<- result) {
+	var response responseMessage
+	var err error
+
+	for {
+		if err = c.conn.ReadJSON(&response); err != nil {
+			err = fmt.Errorf("cannot read JSON message: %s", err)
+		}
+
+		ch <- result{
+			data: response,
+			err:  err,
+		}
+
+		if err != nil {
+			break
+		}
+	}
 }

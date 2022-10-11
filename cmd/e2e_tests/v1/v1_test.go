@@ -1,9 +1,11 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"os"
+	"runtime"
 	"strconv"
 	"testing"
 
@@ -273,4 +275,109 @@ func TestClient_AfterReleaseShouldLock(t *testing.T) {
 	}
 
 	locker.Close()
+}
+
+func TestClient_ReleaseWhenAcquiring_AcquireFirst(t *testing.T) {
+	locker, err := gearlockclient.MakeGearlockClient(gearlockclient.ConnectionOptions{
+		Url: fmt.Sprintf("ws://%s:%s/v1?namespace=123", serverHost, serverPort),
+	})
+
+	if err != nil {
+		t.Fatalf("cannot connect to Gearlock server: %s", err)
+		return
+	}
+
+	waiter, err := gearlockclient.MakeGearlockClient(gearlockclient.ConnectionOptions{
+		Url: fmt.Sprintf("ws://%s:%s/v1?namespace=123", serverHost, serverPort),
+	})
+
+	if err != nil {
+		t.Fatalf("cannot connect to Gearlock server: %s", err)
+		return
+	}
+
+	locker.AddLockResource(gearlockclient.LockTypeWrite, "test5")
+	waiter.AddLockResource(gearlockclient.LockTypeWrite, "test5")
+
+	if err = locker.Lock(); err != nil {
+		t.Fatalf("cannot lock: %s", err)
+		return
+	}
+
+	if err = waiter.Lock(); err != nil {
+		t.Fatalf("cannot lock: %s", err)
+		return
+	}
+
+	ch := make(chan error)
+	go func() {
+		ch <- waiter.Acquire()
+	}()
+
+	runtime.Gosched()
+	if err = waiter.Release(); err != nil {
+		t.Fatalf("cannot release: %s", err)
+		return
+	}
+
+	if err = <-ch; err == nil {
+		t.Fatalf("Expected error in acquire()")
+	}
+
+	if !errors.Is(err, gearlockclient.ErrReleasedBeforeAcquired) {
+		t.Fatalf("Expected ErrReleasedBeforeAcquired error")
+	}
+
+	locker.Close()
+	waiter.Close()
+}
+
+func TestClient_ReleaseWhenAcquiring_ReleaseFirst(t *testing.T) {
+	locker, err := gearlockclient.MakeGearlockClient(gearlockclient.ConnectionOptions{
+		Url: fmt.Sprintf("ws://%s:%s/v1?namespace=123", serverHost, serverPort),
+	})
+
+	if err != nil {
+		t.Fatalf("cannot connect to Gearlock server: %s", err)
+		return
+	}
+
+	waiter, err := gearlockclient.MakeGearlockClient(gearlockclient.ConnectionOptions{
+		Url: fmt.Sprintf("ws://%s:%s/v1?namespace=123", serverHost, serverPort),
+	})
+
+	if err != nil {
+		t.Fatalf("cannot connect to Gearlock server: %s", err)
+		return
+	}
+
+	locker.AddLockResource(gearlockclient.LockTypeWrite, "test6")
+	waiter.AddLockResource(gearlockclient.LockTypeWrite, "test6")
+
+	if err = locker.Lock(); err != nil {
+		t.Fatalf("cannot lock: %s", err)
+		return
+	}
+
+	if err = waiter.Lock(); err != nil {
+		t.Fatalf("cannot lock: %s", err)
+		return
+	}
+
+	if err = waiter.Release(); err != nil {
+		t.Fatalf("cannot release: %s", err)
+		return
+	}
+
+	err = waiter.Acquire()
+	if err == nil {
+		t.Fatalf("Expected error in acquire()")
+	}
+
+	if !errors.Is(err, gearlockclient.ErrReleasedBeforeAcquired) {
+		t.Fatalf("Expected ErrReleasedBeforeAcquired error")
+	}
+
+	locker.Close()
+	waiter.Close()
 }
