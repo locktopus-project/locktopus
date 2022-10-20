@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"testing"
 
-	internal "github.com/xshkut/gearlock/internal/utils"
-	gearlockclient "github.com/xshkut/gearlock/pkg/gearlock_client/v1"
+	internal "github.com/locktopus-project/locktopus/internal/utils"
+	locktopusclient "github.com/locktopus-project/locktopus/pkg/client/v1"
 )
 
 var serverHost = os.Getenv("SERVER_HOST")
@@ -28,26 +28,26 @@ func TestMain(m *testing.M) {
 	m.Run()
 }
 
-func TestClient_MakeGearlockClient_ByUrl(t *testing.T) {
-	client, err := gearlockclient.MakeGearlockClient(gearlockclient.ConnectionOptions{
+func TestClient_MakeLocktopusClient_ByUrl(t *testing.T) {
+	client, err := locktopusclient.MakeLocktopusClient(locktopusclient.ConnectionOptions{
 		Url: fmt.Sprintf("ws://%s:%s/v1?namespace=123", serverHost, serverPort),
 	})
 
 	if err != nil {
-		t.Fatalf("cannot connect to Gearlock server: %s", err)
+		t.Fatalf("cannot connect to Locktopus server: %s", err)
 		return
 	}
 
 	client.Close()
 }
 
-func TestClient_MakeGearlockClient_ByParams(t *testing.T) {
+func TestClient_MakeLocktopusClient_ByParams(t *testing.T) {
 	portNumber, err := strconv.Atoi(serverPort)
 	if err != nil {
 		t.Fatalf("cannot convert port number to int: %s", err)
 	}
 
-	client, err := gearlockclient.MakeGearlockClient(gearlockclient.ConnectionOptions{
+	client, err := locktopusclient.MakeLocktopusClient(locktopusclient.ConnectionOptions{
 		Namespace: "123",
 		Host:      serverHost,
 		Port:      portNumber,
@@ -55,7 +55,7 @@ func TestClient_MakeGearlockClient_ByParams(t *testing.T) {
 	})
 
 	if err != nil {
-		t.Fatalf("cannot connect to Gearlock server: %s", err)
+		t.Fatalf("cannot connect to Locktopus server: %s", err)
 		return
 	}
 
@@ -63,16 +63,16 @@ func TestClient_MakeGearlockClient_ByParams(t *testing.T) {
 }
 
 func TestClient_ImmediateAcquireOnLock(t *testing.T) {
-	client, err := gearlockclient.MakeGearlockClient(gearlockclient.ConnectionOptions{
+	client, err := locktopusclient.MakeLocktopusClient(locktopusclient.ConnectionOptions{
 		Url: fmt.Sprintf("ws://%s:%s/v1?namespace=123", serverHost, serverPort),
 	})
 
 	if err != nil {
-		t.Fatalf("cannot connect to Gearlock server: %s", err)
+		t.Fatalf("cannot connect to Locktopus server: %s", err)
 		return
 	}
 
-	client.AddLockResource(gearlockclient.LockTypeWrite, "test1")
+	client.AddLockResource(locktopusclient.LockTypeWrite, "test1")
 
 	err = client.Lock()
 	if err != nil {
@@ -89,16 +89,16 @@ func TestClient_ImmediateAcquireOnLock(t *testing.T) {
 }
 
 func TestClient_LockID(t *testing.T) {
-	client, err := gearlockclient.MakeGearlockClient(gearlockclient.ConnectionOptions{
+	client, err := locktopusclient.MakeLocktopusClient(locktopusclient.ConnectionOptions{
 		Url: fmt.Sprintf("ws://%s:%s/v1?namespace=123", serverHost, serverPort),
 	})
 
 	if err != nil {
-		t.Fatalf("cannot connect to Gearlock server: %s", err)
+		t.Fatalf("cannot connect to Locktopus server: %s", err)
 		return
 	}
 
-	client.AddLockResource(gearlockclient.LockTypeWrite, "testLockId")
+	client.AddLockResource(locktopusclient.LockTypeWrite, "testLockId")
 
 	err = client.Lock()
 	if err != nil {
@@ -120,26 +120,26 @@ func TestClient_LockID(t *testing.T) {
 }
 
 func TestClient_SequentialAcquire(t *testing.T) {
-	locker, err := gearlockclient.MakeGearlockClient(gearlockclient.ConnectionOptions{
+	locker, err := locktopusclient.MakeLocktopusClient(locktopusclient.ConnectionOptions{
 		Url: fmt.Sprintf("ws://%s:%s/v1?namespace=123", serverHost, serverPort),
 	})
 
 	if err != nil {
-		t.Fatalf("cannot connect to Gearlock server: %s", err)
+		t.Fatalf("cannot connect to Locktopus server: %s", err)
 		return
 	}
 
-	waiter, err := gearlockclient.MakeGearlockClient(gearlockclient.ConnectionOptions{
+	waiter, err := locktopusclient.MakeLocktopusClient(locktopusclient.ConnectionOptions{
 		Url: fmt.Sprintf("ws://%s:%s/v1?namespace=123", serverHost, serverPort),
 	})
 
 	if err != nil {
-		t.Fatalf("cannot connect to Gearlock server: %s", err)
+		t.Fatalf("cannot connect to Locktopus server: %s", err)
 		return
 	}
 
-	locker.AddLockResource(gearlockclient.LockTypeWrite, "test2")
-	waiter.AddLockResource(gearlockclient.LockTypeWrite, "test2")
+	locker.AddLockResource(locktopusclient.LockTypeWrite, "test2")
+	waiter.AddLockResource(locktopusclient.LockTypeWrite, "test2")
 
 	if err = locker.Lock(); err != nil {
 		t.Fatalf("cannot lock: %s", err)
@@ -181,26 +181,26 @@ func TestClient_SequentialAcquire(t *testing.T) {
 }
 
 func TestClient_CloseShouldRelease(t *testing.T) {
-	locker, err := gearlockclient.MakeGearlockClient(gearlockclient.ConnectionOptions{
+	locker, err := locktopusclient.MakeLocktopusClient(locktopusclient.ConnectionOptions{
 		Url: fmt.Sprintf("ws://%s:%s/v1?namespace=123", serverHost, serverPort),
 	})
 
 	if err != nil {
-		t.Fatalf("cannot connect to Gearlock server: %s", err)
+		t.Fatalf("cannot connect to Locktopus server: %s", err)
 		return
 	}
 
-	waiter, err := gearlockclient.MakeGearlockClient(gearlockclient.ConnectionOptions{
+	waiter, err := locktopusclient.MakeLocktopusClient(locktopusclient.ConnectionOptions{
 		Url: fmt.Sprintf("ws://%s:%s/v1?namespace=123", serverHost, serverPort),
 	})
 
 	if err != nil {
-		t.Fatalf("cannot connect to Gearlock server: %s", err)
+		t.Fatalf("cannot connect to Locktopus server: %s", err)
 		return
 	}
 
-	locker.AddLockResource(gearlockclient.LockTypeWrite, "test3")
-	waiter.AddLockResource(gearlockclient.LockTypeWrite, "test3")
+	locker.AddLockResource(locktopusclient.LockTypeWrite, "test3")
+	waiter.AddLockResource(locktopusclient.LockTypeWrite, "test3")
 
 	if err = locker.Lock(); err != nil {
 		t.Fatalf("cannot lock: %s", err)
@@ -238,16 +238,16 @@ func TestClient_CloseShouldRelease(t *testing.T) {
 }
 
 func TestClient_AfterReleaseShouldLock(t *testing.T) {
-	locker, err := gearlockclient.MakeGearlockClient(gearlockclient.ConnectionOptions{
+	locker, err := locktopusclient.MakeLocktopusClient(locktopusclient.ConnectionOptions{
 		Url: fmt.Sprintf("ws://%s:%s/v1?namespace=123", serverHost, serverPort),
 	})
 
 	if err != nil {
-		t.Fatalf("cannot connect to Gearlock server: %s", err)
+		t.Fatalf("cannot connect to Locktopus server: %s", err)
 		return
 	}
 
-	locker.AddLockResource(gearlockclient.LockTypeWrite, "test4")
+	locker.AddLockResource(locktopusclient.LockTypeWrite, "test4")
 
 	if err = locker.Lock(); err != nil {
 		t.Fatalf("cannot lock: %s", err)
@@ -278,26 +278,26 @@ func TestClient_AfterReleaseShouldLock(t *testing.T) {
 }
 
 func TestClient_ReleaseWhenAcquiring_AcquireFirst(t *testing.T) {
-	locker, err := gearlockclient.MakeGearlockClient(gearlockclient.ConnectionOptions{
+	locker, err := locktopusclient.MakeLocktopusClient(locktopusclient.ConnectionOptions{
 		Url: fmt.Sprintf("ws://%s:%s/v1?namespace=123", serverHost, serverPort),
 	})
 
 	if err != nil {
-		t.Fatalf("cannot connect to Gearlock server: %s", err)
+		t.Fatalf("cannot connect to Locktopus server: %s", err)
 		return
 	}
 
-	waiter, err := gearlockclient.MakeGearlockClient(gearlockclient.ConnectionOptions{
+	waiter, err := locktopusclient.MakeLocktopusClient(locktopusclient.ConnectionOptions{
 		Url: fmt.Sprintf("ws://%s:%s/v1?namespace=123", serverHost, serverPort),
 	})
 
 	if err != nil {
-		t.Fatalf("cannot connect to Gearlock server: %s", err)
+		t.Fatalf("cannot connect to Locktopus server: %s", err)
 		return
 	}
 
-	locker.AddLockResource(gearlockclient.LockTypeWrite, "test5")
-	waiter.AddLockResource(gearlockclient.LockTypeWrite, "test5")
+	locker.AddLockResource(locktopusclient.LockTypeWrite, "test5")
+	waiter.AddLockResource(locktopusclient.LockTypeWrite, "test5")
 
 	if err = locker.Lock(); err != nil {
 		t.Fatalf("cannot lock: %s", err)
@@ -324,7 +324,7 @@ func TestClient_ReleaseWhenAcquiring_AcquireFirst(t *testing.T) {
 		t.Fatalf("Expected error in acquire()")
 	}
 
-	if !errors.Is(err, gearlockclient.ErrReleasedBeforeAcquired) {
+	if !errors.Is(err, locktopusclient.ErrReleasedBeforeAcquired) {
 		t.Fatalf("Expected ErrReleasedBeforeAcquired error")
 	}
 
@@ -333,26 +333,26 @@ func TestClient_ReleaseWhenAcquiring_AcquireFirst(t *testing.T) {
 }
 
 func TestClient_ReleaseWhenAcquiring_ReleaseFirst(t *testing.T) {
-	locker, err := gearlockclient.MakeGearlockClient(gearlockclient.ConnectionOptions{
+	locker, err := locktopusclient.MakeLocktopusClient(locktopusclient.ConnectionOptions{
 		Url: fmt.Sprintf("ws://%s:%s/v1?namespace=123", serverHost, serverPort),
 	})
 
 	if err != nil {
-		t.Fatalf("cannot connect to Gearlock server: %s", err)
+		t.Fatalf("cannot connect to Locktopus server: %s", err)
 		return
 	}
 
-	waiter, err := gearlockclient.MakeGearlockClient(gearlockclient.ConnectionOptions{
+	waiter, err := locktopusclient.MakeLocktopusClient(locktopusclient.ConnectionOptions{
 		Url: fmt.Sprintf("ws://%s:%s/v1?namespace=123", serverHost, serverPort),
 	})
 
 	if err != nil {
-		t.Fatalf("cannot connect to Gearlock server: %s", err)
+		t.Fatalf("cannot connect to Locktopus server: %s", err)
 		return
 	}
 
-	locker.AddLockResource(gearlockclient.LockTypeWrite, "test6")
-	waiter.AddLockResource(gearlockclient.LockTypeWrite, "test6")
+	locker.AddLockResource(locktopusclient.LockTypeWrite, "test6")
+	waiter.AddLockResource(locktopusclient.LockTypeWrite, "test6")
 
 	if err = locker.Lock(); err != nil {
 		t.Fatalf("cannot lock: %s", err)
@@ -374,7 +374,7 @@ func TestClient_ReleaseWhenAcquiring_ReleaseFirst(t *testing.T) {
 		t.Fatalf("Expected error in acquire()")
 	}
 
-	if !errors.Is(err, gearlockclient.ErrReleasedBeforeAcquired) {
+	if !errors.Is(err, locktopusclient.ErrReleasedBeforeAcquired) {
 		t.Fatalf("Expected ErrReleasedBeforeAcquired error")
 	}
 

@@ -8,8 +8,8 @@ import (
 	"os"
 	"testing"
 
-	internal "github.com/xshkut/gearlock/internal/utils"
-	gearlockclient "github.com/xshkut/gearlock/pkg/gearlock_client/v1"
+	internal "github.com/locktopus-project/locktopus/internal/utils"
+	locktopusclient "github.com/locktopus-project/locktopus/pkg/client/v1"
 )
 
 var serverHost = os.Getenv("SERVER_HOST")
@@ -45,7 +45,7 @@ func TestStats_BeforeInitiatingNamespace(t *testing.T) {
 	// make http get request to url
 	resp, err := http.Get(url)
 	if err != nil {
-		t.Fatalf("cannot query Gearlock server: %s", err)
+		t.Fatalf("cannot query Locktopus server: %s", err)
 		return
 	}
 
@@ -58,18 +58,18 @@ func TestStats_BeforeInitiatingNamespace(t *testing.T) {
 func TestStats_AfterInitiatingNamespace(t *testing.T) {
 	url := fmt.Sprintf("http://%s:%s/stats_v1?namespace=%s", serverHost, serverPort, statsNamespaceName)
 
-	_, err := gearlockclient.MakeGearlockClient(gearlockclient.ConnectionOptions{
+	_, err := locktopusclient.MakeLocktopusClient(locktopusclient.ConnectionOptions{
 		Url: fmt.Sprintf("ws://%s:%s/v1?namespace=%s", serverHost, serverPort, statsNamespaceName),
 	})
 	if err != nil {
-		t.Fatalf("cannot connect to Gearlock server: %s", err)
+		t.Fatalf("cannot connect to Locktopus server: %s", err)
 		return
 	}
 
 	// make http get request to url
 	resp, err := http.Get(url)
 	if err != nil {
-		t.Fatalf("cannot query Gearlock server: %s", err)
+		t.Fatalf("cannot query Locktopus server: %s", err)
 		return
 	}
 

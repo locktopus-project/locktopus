@@ -5,9 +5,9 @@ services:
       context: ../../
       dockerfile: Dockerfile
     environment:
-      - GEARLOCK_PORT=9009
-      - GEARLOCK_HOST=0.0.0.0
-      - GEARLOCK_STOP_AFTER=30
+      - LOCKTOPUS_PORT=9009
+      - LOCKTOPUS_HOST=0.0.0.0
+      - LOCKTOPUS_STOP_AFTER=30
   v1:
     build:
       context: ../../

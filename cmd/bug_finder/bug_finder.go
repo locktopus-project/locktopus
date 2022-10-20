@@ -8,7 +8,7 @@ import (
 	"math/rand"
 	"time"
 
-	ml "github.com/xshkut/gearlock/pkg/multilocker"
+	ml "github.com/locktopus-project/locktopus/pkg/multilocker"
 )
 
 const branchingFactor = 3

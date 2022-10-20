@@ -1,4 +1,4 @@
-module github.com/xshkut/gearlock
+module github.com/locktopus-project/locktopus
 
 go 1.18
 

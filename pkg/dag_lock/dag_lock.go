@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"sync"
 
-	internal "github.com/xshkut/gearlock/pkg/set"
+	internal "github.com/locktopus-project/locktopus/pkg/set"
 )
 
 // LockType can be LockTypeRead or LockTypeWrite (see sync.RWMutex).

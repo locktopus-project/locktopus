@@ -6,7 +6,7 @@ import (
 	"strconv"
 
 	f "github.com/jessevdk/go-flags"
-	constants "github.com/xshkut/gearlock/internal/constants"
+	constants "github.com/locktopus-project/locktopus/internal/constants"
 )
 
 var port string
@@ -16,12 +16,12 @@ var statInterval = 0
 
 var arguments struct {
 	Help               bool   `short:"h" long:"help" description:"Show help message and exit"`
-	Host               string `short:"H" long:"host" description:"Hostname for listening. Overrides env var GEARLOCK_HOST. Default: 0.0.0.0"`
-	Port               string `short:"p" long:"port" description:"Port to listen on. Overrides env var GEARLOCK_PORT. Default: 9009"`
-	LogClients         string `long:"log-clients" description:"Log client sessions (true/false). Overrides env var GEARLOCK_LOG_CLIENTS. Default: false"`
-	LogLocks           string `long:"log-locks" description:"Log locks caused by client sessions (true/false). Overrides env var GEARLOCK_LOG_LOCKS. Default: false"`
-	StatisticsInterval string `long:"stats-interval" description:"Log usage statistics every N>0 seconds. Overrides env var GEARLOCK_STATS_INTERVAL. Default: 0 (never)"`
-	StopAfter          string `short:"s" long:"stop-after" description:"Stop after seconds N>0 seconds. Overrides env var GEARLOCK_STOP_AFTER. Default: 0 (never)"`
+	Host               string `short:"H" long:"host" description:"Hostname for listening. Overrides env var LOCKTOPUS_HOST. Default: 0.0.0.0"`
+	Port               string `short:"p" long:"port" description:"Port to listen on. Overrides env var LOCKTOPUS_PORT. Default: 9009"`
+	LogClients         string `long:"log-clients" description:"Log client sessions (true/false). Overrides env var LOCKTOPUS_LOG_CLIENTS. Default: false"`
+	LogLocks           string `long:"log-locks" description:"Log locks caused by client sessions (true/false). Overrides env var LOCKTOPUS_LOG_LOCKS. Default: false"`
+	StatisticsInterval string `long:"stats-interval" description:"Log usage statistics every N>0 seconds. Overrides env var LOCKTOPUS_STATS_INTERVAL. Default: 0 (never)"`
+	StopAfter          string `short:"s" long:"stop-after" description:"Stop after seconds N>0 seconds. Overrides env var LOCKTOPUS_STOP_AFTER. Default: 0 (never)"`
 }
 
 func parseArguments() {

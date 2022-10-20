@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/xshkut/gearlock/internal/constants"
-	ns "github.com/xshkut/gearlock/internal/namespace"
+	"github.com/locktopus-project/locktopus/internal/constants"
+	ns "github.com/locktopus-project/locktopus/internal/namespace"
 )
 
 func statsV1Handler(w http.ResponseWriter, r *http.Request) {

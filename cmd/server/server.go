@@ -12,7 +12,7 @@ import (
 	"github.com/gorilla/mux"
 
 	// internal
-	ns "github.com/xshkut/gearlock/internal/namespace"
+	ns "github.com/locktopus-project/locktopus/internal/namespace"
 )
 
 const numberOfPosixSignals = 28
@@ -126,7 +126,7 @@ func listen(server http.Server) <-chan error {
 }
 
 func greetingsHandler(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte("Welcome to GearLock server!\n\nAvailable API versions: \n"))
+	w.Write([]byte("Welcome to LOCKTOPUS server!\n\nAvailable API versions: \n"))
 	for _, apiHandler := range apiHandlers {
 		w.Write([]byte(fmt.Sprintf("%s\te.g. %s\n", apiHandler.version, apiHandler.connStrExample)))
 	}

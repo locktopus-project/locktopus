@@ -1,7 +1,7 @@
 package main
 
 import (
-	logger "github.com/xshkut/gearlock/internal/logger"
+	logger "github.com/locktopus-project/locktopus/internal/logger"
 )
 
 var mainLogger = logger.NewLogger()

@@ -9,9 +9,9 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	"github.com/xshkut/gearlock/internal/constants"
-	ns "github.com/xshkut/gearlock/internal/namespace"
-	ml "github.com/xshkut/gearlock/pkg/multilocker"
+	"github.com/locktopus-project/locktopus/internal/constants"
+	ns "github.com/locktopus-project/locktopus/internal/namespace"
+	ml "github.com/locktopus-project/locktopus/pkg/multilocker"
 )
 
 var upgrader = websocket.Upgrader{

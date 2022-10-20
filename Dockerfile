@@ -18,6 +18,6 @@ FROM alpine:3
 
 WORKDIR /
 
-COPY --from=build /app/bin/server /bin/gearlock
+COPY --from=build /app/bin/server /bin/locktopus
 
-ENTRYPOINT ["/bin/gearlock"]
+ENTRYPOINT ["/bin/locktopus"]

@@ -1,6 +1,6 @@
 package constants
 
-const EnvPrefix = "GEARLOCK_"
+const EnvPrefix = "LOCKTOPUS_"
 
 const NamespaceQueryParameterName = "namespace"
 

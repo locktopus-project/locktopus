@@ -1,4 +1,4 @@
-package gearlockclient
+package client
 
 import (
 	"errors"
@@ -6,11 +6,11 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	ml "github.com/xshkut/gearlock/pkg/multilocker"
+	ml "github.com/locktopus-project/locktopus/pkg/multilocker"
 )
 
-// GearlockClient is a client for Gearlock server. Use MakeGearlockClient to instantiate one and connect.
-type GearlockClient struct {
+// LocktopusClient is a client for Locktopus server. Use MakeLocktopusClient to instantiate one and connect.
+type LocktopusClient struct {
 	conn      *websocket.Conn
 	lr        []resource
 	acquired  bool
@@ -36,8 +36,8 @@ const (
 
 const version = "v1"
 
-// MakeGearlockClient establishes a connection to the Gearlock server and returns GearlockClient.
-func MakeGearlockClient(options ConnectionOptions) (*GearlockClient, error) {
+// MakeLocktopusClient establishes a connection to the Locktopus server and returns LocktopusClient.
+func MakeLocktopusClient(options ConnectionOptions) (*LocktopusClient, error) {
 	url := options.Url
 
 	if url == "" {
@@ -60,10 +60,10 @@ func MakeGearlockClient(options ConnectionOptions) (*GearlockClient, error) {
 
 	conn, _, err := websocket.DefaultDialer.Dial(url, nil)
 	if err != nil {
-		return nil, fmt.Errorf("cannot dial to Gearlock server: %s", err)
+		return nil, fmt.Errorf("cannot dial to Locktopus server: %s", err)
 	}
 
-	gc := GearlockClient{
+	gc := LocktopusClient{
 		conn: conn,
 	}
 
@@ -78,7 +78,7 @@ func MakeGearlockClient(options ConnectionOptions) (*GearlockClient, error) {
 const closeMessage = "close"
 
 // Close us used to close the connection when it is not needed anymore or after an error.
-func (c *GearlockClient) Close() error {
+func (c *LocktopusClient) Close() error {
 	err := c.conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, closeMessage), time.Now().Add(time.Second))
 	if err != nil {
 		return fmt.Errorf("cannot write close message: %s", err)
@@ -89,7 +89,7 @@ func (c *GearlockClient) Close() error {
 }
 
 // AddLockResource adds resources to be used and flushed within next Lock() call.
-func (c *GearlockClient) AddLockResource(lockType LockType, resources ...string) {
+func (c *LocktopusClient) AddLockResource(lockType LockType, resources ...string) {
 	lr := ml.NewResourceLock(lockType, resources)
 
 	c.lr = append(c.lr, resource{
@@ -99,7 +99,7 @@ func (c *GearlockClient) AddLockResource(lockType LockType, resources ...string)
 }
 
 // Lock locks added resources. Use IsAcquired() to check if lock has been acquired.
-func (c *GearlockClient) Lock() (err error) {
+func (c *LocktopusClient) Lock() (err error) {
 	select {
 	case <-c.released:
 	default:
@@ -138,11 +138,11 @@ func (c *GearlockClient) Lock() (err error) {
 }
 
 // IsAcquired returns true if last Lock() has been acquired, so there is no need to call Acquire()
-func (c *GearlockClient) IsAcquired() bool {
+func (c *LocktopusClient) IsAcquired() bool {
 	return c.acquired
 }
 
-func (c *GearlockClient) LockID() string {
+func (c *LocktopusClient) LockID() string {
 	return c.lockID
 }
 
@@ -150,7 +150,7 @@ var ErrReleasedBeforeAcquired = errors.New("cannot release lock before it has be
 var ErrUnexpectedResponse = errors.New("unexpected response")
 
 // Acquire is used to wait until the lock is acquired. If IsAcquired() returns true after calling Lock(), calling Acquire() is no-op.
-func (c *GearlockClient) Acquire() (err error) {
+func (c *LocktopusClient) Acquire() (err error) {
 	var response responseMessage
 
 	if c.acquired {
@@ -192,7 +192,7 @@ func (c *GearlockClient) Acquire() (err error) {
 }
 
 // Release releases the lock. After that you may call AddLockResource() and Lock() again.
-func (c *GearlockClient) Release() (err error) {
+func (c *LocktopusClient) Release() (err error) {
 	c.released <- struct{}{}
 
 	var response responseMessage
@@ -239,7 +239,7 @@ type result struct {
 	err  error
 }
 
-func (c *GearlockClient) readResponses(ch chan<- result) {
+func (c *LocktopusClient) readResponses(ch chan<- result) {
 	var response responseMessage
 	var err error
 

@@ -1,4 +1,4 @@
-package gearlockclient
+package client
 
 // This definitions are copied from cmd/server/api_v1.go.
 
