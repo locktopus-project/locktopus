@@ -81,7 +81,7 @@ type statistics struct {
 
 // NewMultilocker creates an instance of MultiLocker. Use Close() to finish its goroutines.
 func NewMultilocker() *MultiLocker {
-	ls := MultiLocker{
+	multilocker := MultiLocker{
 		segmentTokens: setCounter.NewSetCounter(),
 		lockSurface:   make(map[string][]lockRef),
 		garbage:       make(chan [][]token, garbageBufferSize),
@@ -89,11 +89,11 @@ func NewMultilocker() *MultiLocker {
 		cleaned:       make(chan struct{}),
 	}
 
-	ls.rootRef = ls.tokenizeSegments([]string{""})[0]
+	multilocker.rootRef = multilocker.tokenizeSegments([]string{""})[0]
 
-	go ls.cleanPaths()
+	go multilocker.cleanPaths()
 
-	return &ls
+	return &multilocker
 }
 
 // Close forbids making new locks and returns when the cleaner finishes with the remaining garbage.

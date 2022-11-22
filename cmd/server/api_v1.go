@@ -128,7 +128,7 @@ func readMessages(conn *websocket.Conn, ch chan<- requestMessage) (err error) {
 	return err
 }
 
-func handleCommunication(conn *websocket.Conn, ls *ml.MultiLocker, connID int64, timeout time.Duration) (err error) {
+func handleCommunication(conn *websocket.Conn, multilocker *ml.MultiLocker, connID int64, timeout time.Duration) (err error) {
 	var readErr error
 	var l *ml.Lock
 	var id int64
@@ -184,7 +184,7 @@ func handleCommunication(conn *websocket.Conn, ls *ml.MultiLocker, connID int64,
 
 			lockLogger.Infof("Locking resources for connection [id = %d]: %v...", connID, resourceLocks)
 
-			newLock := ls.Lock(resourceLocks)
+			newLock := multilocker.Lock(resourceLocks)
 
 			lockLogger.Infof("Locked resources for connection [id = %d]: %v", connID, resourceLocks)
 

@@ -39,12 +39,12 @@ func simulateClient(ch chan struct{}) {
 		resources1 := getRandomResourceLockGroup()
 		resources2 := getRandomResourceLockGroup()
 
-		ls := ml.NewMultilocker()
+		multilocker := ml.NewMultilocker()
 		m := NewResourceMap()
 		unlocker := make(chan struct{})
 
-		go lockAndCheckCollision(resources1, ls, m, unlocker)
-		go lockAndCheckCollision(resources2, ls, m, unlocker)
+		go lockAndCheckCollision(resources1, multilocker, m, unlocker)
+		go lockAndCheckCollision(resources2, multilocker, m, unlocker)
 
 		if maxLockDurationMs > 0 {
 			time.Sleep(time.Duration(maxLockDurationMs) * time.Millisecond)
@@ -52,14 +52,14 @@ func simulateClient(ch chan struct{}) {
 
 		unlocker <- struct{}{}
 		unlocker <- struct{}{}
-		ls.Close()
+		multilocker.Close()
 
-		ls = ml.NewMultilocker()
+		multilocker = ml.NewMultilocker()
 		m = NewResourceMap()
 		unlocker = make(chan struct{})
 
-		go lockAndCheckCollision(resources2, ls, m, unlocker)
-		go lockAndCheckCollision(resources1, ls, m, unlocker)
+		go lockAndCheckCollision(resources2, multilocker, m, unlocker)
+		go lockAndCheckCollision(resources1, multilocker, m, unlocker)
 
 		if maxLockDurationMs > 0 {
 			time.Sleep(time.Duration(maxLockDurationMs) * time.Millisecond)
@@ -67,14 +67,14 @@ func simulateClient(ch chan struct{}) {
 
 		unlocker <- struct{}{}
 		unlocker <- struct{}{}
-		ls.Close()
+		multilocker.Close()
 	}
 }
 
-func lockAndCheckCollision(resources []ml.ResourceLock, ls *ml.MultiLocker, m *ResourceMap, unlock <-chan struct{}) {
+func lockAndCheckCollision(resources []ml.ResourceLock, multilocker *ml.MultiLocker, m *ResourceMap, unlock <-chan struct{}) {
 	groupRef := new(int8)
 
-	lock := ls.Lock(resources)
+	lock := multilocker.Lock(resources)
 	u := lock.Acquire()
 	defer func() {
 		u.Unlock()
