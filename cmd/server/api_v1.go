@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -31,6 +32,19 @@ func apiV1Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	timeoutParam := "60"
+	if r.URL.Query().Has(constants.TimeoutQueryParameterName) {
+		timeoutParam = r.URL.Query().Get(constants.TimeoutQueryParameterName)
+	}
+
+	timeoutMs, err := strconv.Atoi(timeoutParam)
+
+	if err != nil || timeoutMs < 0 {
+		w.Write([]byte(fmt.Sprintf("URL parameter '%s' should be integer value >= 0 representing broken connection timeout (in milliseconds)", constants.TimeoutQueryParameterName)))
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		apiLogger.Error(fmt.Errorf("upgrade error: %w", err))
@@ -47,7 +61,7 @@ func apiV1Handler(w http.ResponseWriter, r *http.Request) {
 		mainLogger.Infof("Created new multilocker namespace %s", namespace)
 	}
 
-	err = handleCommunication(conn, ns, connID)
+	err = handleCommunication(conn, ns, connID, time.Duration(timeoutMs)*time.Millisecond)
 
 	if err != nil {
 		conn.WriteMessage(websocket.TextMessage, []byte(fmt.Errorf("communication error: %w", err).Error()))
@@ -114,7 +128,7 @@ func readMessages(conn *websocket.Conn, ch chan<- requestMessage) (err error) {
 	return err
 }
 
-func handleCommunication(conn *websocket.Conn, ls *ml.MultiLocker, connID int64) (err error) {
+func handleCommunication(conn *websocket.Conn, ls *ml.MultiLocker, connID int64, timeout time.Duration) (err error) {
 	var readErr error
 	var l *ml.Lock
 	var id int64
@@ -138,7 +152,7 @@ func handleCommunication(conn *websocket.Conn, ls *ml.MultiLocker, connID int64)
 			case <-l.Ready():
 				state = clientStateAcquired
 
-				if err != conn.WriteJSON(responseMessage{ID: fmt.Sprintf("%d", l.ID()), Action: actionLock, State: state.String()}) {
+				if err != writeResponse(conn, l.ID(), actionLock, state) {
 					err = fmt.Errorf("cannot send JSON message: %w", err)
 				}
 
@@ -184,7 +198,7 @@ func handleCommunication(conn *websocket.Conn, ls *ml.MultiLocker, connID int64)
 				state = clientStateEnqueued
 			}
 
-			if err != conn.WriteJSON(responseMessage{ID: fmt.Sprintf("%d", id), Action: incm.Action, State: state.String()}) {
+			if err != writeResponse(conn, id, incm.Action, state) {
 				err = fmt.Errorf("cannot send JSON message: %w", err)
 				break
 			}
@@ -202,14 +216,16 @@ func handleCommunication(conn *websocket.Conn, ls *ml.MultiLocker, connID int64)
 
 		state = clientStateReady
 
-		if err != conn.WriteJSON(responseMessage{ID: fmt.Sprintf("%d", id), Action: incm.Action, State: state.String()}) {
+		if err != writeResponse(conn, id, incm.Action, state) {
 			err = fmt.Errorf("cannot send JSON message: %w", err)
 			break
 		}
-
 	}
 
 	if l != nil {
+		// If client has not released the lock and error occurred, release lock after idle timeout
+		time.Sleep(timeout)
+
 		l.Acquire().Unlock()
 	}
 
@@ -268,4 +284,8 @@ func assertCorrectAction(action action, state ClientState) error {
 	}
 
 	return fmt.Errorf("invalid action [%s] in state [%s]", action, state)
+}
+
+func writeResponse(conn *websocket.Conn, id int64, a action, s ClientState) error {
+	return conn.WriteJSON(responseMessage{ID: fmt.Sprintf("%d", id), Action: a, State: s.String()})
 }
