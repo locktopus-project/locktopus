@@ -1,48 +1,20 @@
-package main
+package main_test
 
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
-	"os"
 	"testing"
 
-	internal "github.com/locktopus-project/locktopus/internal/utils"
+	"github.com/locktopus-project/locktopus/internal/constants"
 	locktopusclient "github.com/locktopus-project/locktopus/pkg/client/v1"
 )
 
-var serverHost = os.Getenv("SERVER_HOST")
-var serverPort = os.Getenv("SERVER_PORT")
-
-const connTimeoutMs = 5000
-const connPollIntervalMs = 100
-
 const statsNamespaceName = "stats_namespace"
 
-func init() {
-	if serverHost == "" {
-		serverHost = "localhost"
-	}
-
-	if serverPort == "" {
-		serverPort = "9009"
-	}
-}
-
-func TestMain(m *testing.M) {
-	err := internal.CheckServerAvailability(fmt.Sprintf("http://%s:%s", serverHost, serverPort), connTimeoutMs, connPollIntervalMs)
-	if err != nil {
-		log.Fatalf("Cannot ensure server availability: %s", err)
-	}
-
-	m.Run()
-}
-
 func TestStats_BeforeInitiatingNamespace(t *testing.T) {
-	url := fmt.Sprintf("http://%s:%s/stats_v1?namespace=%s", serverHost, serverPort, statsNamespaceName)
+	url := fmt.Sprintf("http://%s/stats_v1?%s=%s", serverAddress, constants.NamespaceQueryParameterName, statsNamespaceName)
 
-	// make http get request to url
 	resp, err := http.Get(url)
 	if err != nil {
 		t.Fatalf("cannot query Locktopus server: %s", err)
@@ -56,10 +28,10 @@ func TestStats_BeforeInitiatingNamespace(t *testing.T) {
 }
 
 func TestStats_AfterInitiatingNamespace(t *testing.T) {
-	url := fmt.Sprintf("http://%s:%s/stats_v1?namespace=%s", serverHost, serverPort, statsNamespaceName)
+	url := fmt.Sprintf("http://%s/stats_v1?%s=%s", serverAddress, constants.NamespaceQueryParameterName, statsNamespaceName)
 
-	_, err := locktopusclient.MakeLocktopusClient(locktopusclient.ConnectionOptions{
-		Url: fmt.Sprintf("ws://%s:%s/v1?namespace=%s", serverHost, serverPort, statsNamespaceName),
+	_, err := locktopusclient.MakeClient(locktopusclient.ConnectionOptions{
+		Url: fmt.Sprintf("ws://%s/v1?%s=%s", serverAddress, constants.NamespaceQueryParameterName, statsNamespaceName),
 	})
 	if err != nil {
 		t.Fatalf("cannot connect to Locktopus server: %s", err)

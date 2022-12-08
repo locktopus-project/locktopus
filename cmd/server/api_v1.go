@@ -23,26 +23,28 @@ var upgrader = websocket.Upgrader{
 
 const invalidInputCode = 3000
 
-func apiV1Handler(w http.ResponseWriter, r *http.Request) {
+func apiV1Handler(w http.ResponseWriter, r *http.Request, defAbandonTimeout time.Duration) {
 	namespace := r.URL.Query().Get(constants.NamespaceQueryParameterName)
+	var abandonTimeout = defAbandonTimeout
 
 	if namespace == "" {
+		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte(fmt.Sprintf("URL parameter '%s' is required", constants.NamespaceQueryParameterName)))
-		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
-	timeoutParam := "60"
-	if r.URL.Query().Has(constants.TimeoutQueryParameterName) {
-		timeoutParam = r.URL.Query().Get(constants.TimeoutQueryParameterName)
-	}
+	if r.URL.Query().Has(constants.AbandonTimeoutQueryParameterName) {
+		timeoutParam := r.URL.Query().Get(constants.AbandonTimeoutQueryParameterName)
 
-	timeoutMs, err := strconv.Atoi(timeoutParam)
+		timeoutMs, err := strconv.Atoi(timeoutParam)
 
-	if err != nil || timeoutMs < 0 {
-		w.Write([]byte(fmt.Sprintf("URL parameter '%s' should be integer value >= 0 representing broken connection timeout (in milliseconds)", constants.TimeoutQueryParameterName)))
-		w.WriteHeader(http.StatusBadRequest)
-		return
+		if err != nil || timeoutMs < 0 {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte(fmt.Sprintf("URL parameter '%s' should be integer value >= 0 representing broken connection timeout (in milliseconds)", constants.AbandonTimeoutQueryParameterName)))
+			return
+		}
+
+		abandonTimeout = time.Duration(timeoutMs) * time.Millisecond
 	}
 
 	conn, err := upgrader.Upgrade(w, r, nil)
@@ -61,7 +63,7 @@ func apiV1Handler(w http.ResponseWriter, r *http.Request) {
 		mainLogger.Infof("Created new multilocker namespace %s", namespace)
 	}
 
-	err = handleCommunication(conn, ns, connID, time.Duration(timeoutMs)*time.Millisecond)
+	err = handleCommunication(conn, ns, connID, abandonTimeout)
 
 	if err != nil {
 		conn.WriteMessage(websocket.TextMessage, []byte(fmt.Errorf("communication error: %w", err).Error()))
@@ -182,7 +184,7 @@ func handleCommunication(conn *websocket.Conn, multilocker *ml.MultiLocker, conn
 				break
 			}
 
-			lockLogger.Infof("Locking resources for connection [id = %d]: %v...", connID, resourceLocks)
+			lockLogger.Infof("Locking resources for connection [id = %d]: %v", connID, resourceLocks)
 
 			newLock := multilocker.Lock(resourceLocks)
 
@@ -206,6 +208,8 @@ func handleCommunication(conn *websocket.Conn, multilocker *ml.MultiLocker, conn
 			continue
 		}
 
+		// Action = actionRelease
+
 		go func(l *ml.Lock) {
 			l.Acquire().Unlock()
 		}(l)
@@ -223,8 +227,11 @@ func handleCommunication(conn *websocket.Conn, multilocker *ml.MultiLocker, conn
 	}
 
 	if l != nil {
-		// If client has not released the lock and error occurred, release lock after idle timeout
-		time.Sleep(timeout)
+		// If client has not released the lock and error occurred, release lock after abandon timeout
+		if state != clientStateReady {
+			lockLogger.Infof("Connection closed in non-ready state [id = %d]. Wait %v before releasing", connID, timeout)
+			time.Sleep(timeout)
+		}
 
 		l.Acquire().Unlock()
 	}

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"time"
 
 	f "github.com/jessevdk/go-flags"
 	constants "github.com/locktopus-project/locktopus/internal/constants"
@@ -11,17 +12,17 @@ import (
 
 var port string
 var hostname string
-var stopAfter = 0
 var statInterval = 0
+var defaultAbandonTimeout = time.Millisecond * constants.DefaultAbandonTimeoutMs
 
 var arguments struct {
-	Help               bool   `short:"h" long:"help" description:"Show help message and exit"`
-	Host               string `short:"H" long:"host" description:"Hostname for listening. Overrides env var LOCKTOPUS_HOST. Default: 0.0.0.0"`
-	Port               string `short:"p" long:"port" description:"Port to listen on. Overrides env var LOCKTOPUS_PORT. Default: 9009"`
-	LogClients         string `long:"log-clients" description:"Log client sessions (true/false). Overrides env var LOCKTOPUS_LOG_CLIENTS. Default: false"`
-	LogLocks           string `long:"log-locks" description:"Log locks caused by client sessions (true/false). Overrides env var LOCKTOPUS_LOG_LOCKS. Default: false"`
-	StatisticsInterval string `long:"stats-interval" description:"Log usage statistics every N>0 seconds. Overrides env var LOCKTOPUS_STATS_INTERVAL. Default: 0 (never)"`
-	StopAfter          string `short:"s" long:"stop-after" description:"Stop after seconds N>0 seconds. Overrides env var LOCKTOPUS_STOP_AFTER. Default: 0 (never)"`
+	Help                 bool   `short:"h" long:"help" description:"Show help message and exit"`
+	Host                 string `short:"H" long:"host" description:"Hostname for listening. Overrides env var LOCKTOPUS_HOST. Default: 0.0.0.0"`
+	Port                 string `short:"p" long:"port" description:"Port to listen on. Overrides env var LOCKTOPUS_PORT. Default: 9009"`
+	LogClients           string `long:"log-clients" description:"Log client sessions (true/false). Overrides env var LOCKTOPUS_LOG_CLIENTS. Default: false"`
+	LogLocks             string `long:"log-locks" description:"Log locks caused by client sessions (true/false). Overrides env var LOCKTOPUS_LOG_LOCKS. Default: false"`
+	StatisticsInterval   string `long:"stats-interval" description:"Log usage statistics every N>0 seconds. Overrides env var LOCKTOPUS_STATS_INTERVAL. Default: 0 (never)"`
+	GlobalAbandonTimeout string `long:"default-abandon-timeout" description:"Default abandon timeout (ms) used fo releasing closed connections not released by clients. Overrides env var LOCKTOPUS_DEFAULT_ABANDON_TIMEOUT. Default: 60000"`
 }
 
 func parseArguments() {
@@ -51,20 +52,6 @@ func parseArguments() {
 		lockLogger.Disable()
 	}
 
-	if v := resolveStringParameter(arguments.StopAfter, "STOP_AFTER", ""); v != "" {
-		after, err := strconv.Atoi(v)
-
-		if err != nil {
-			mainLogger.Errorf("Cannot parse stop-after value: %s", err)
-			os.Exit(1)
-			return
-		}
-
-		mainLogger.Infof("Service will stop after %d seconds", after)
-
-		stopAfter = after
-	}
-
 	if v := resolveStringParameter(arguments.StatisticsInterval, "STATS_INTERVAL", ""); v != "" {
 		interval, err := strconv.Atoi(v)
 
@@ -75,6 +62,18 @@ func parseArguments() {
 		}
 
 		statInterval = interval
+	}
+
+	if v := resolveStringParameter(arguments.GlobalAbandonTimeout, "DEFAULT_ABANDON_TIMEOUT", ""); v != "" {
+		timeoutMs, err := strconv.Atoi(v)
+
+		if err != nil {
+			mainLogger.Errorf("Cannot parse default-abandon-timeout value: %s", err)
+			os.Exit(1)
+			return
+		}
+
+		defaultAbandonTimeout = time.Millisecond * time.Duration(timeoutMs)
 	}
 }
 

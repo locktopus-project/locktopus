@@ -3,9 +3,12 @@ package client
 import (
 	"errors"
 	"fmt"
+	"io/ioutil"
+	"net/url"
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/locktopus-project/locktopus/internal/constants"
 	ml "github.com/locktopus-project/locktopus/pkg/multilocker"
 )
 
@@ -20,11 +23,12 @@ type LocktopusClient struct {
 }
 
 type ConnectionOptions struct {
-	Url       string // if provided, other options are ignored
-	Host      string
-	Port      int
-	Namespace string
-	Secure    bool
+	Url                 string // if provided, other options are ignored
+	Host                string
+	Port                int
+	Namespace           string
+	Secure              bool
+	ForceCloseTimeoutMs *int // if provided, server will keep the lock for this time after client disconnects without releasing it
 }
 
 type LockType = ml.LockType
@@ -36,18 +40,18 @@ const (
 
 const version = "v1"
 
-// MakeLocktopusClient establishes a connection to the Locktopus server and returns LocktopusClient.
-func MakeLocktopusClient(options ConnectionOptions) (*LocktopusClient, error) {
-	url := options.Url
+// MakeClient establishes a connection to the Locktopus server and returns LocktopusClient.
+func MakeClient(options ConnectionOptions) (*LocktopusClient, error) {
+	address := options.Url
 
-	if url == "" {
+	if address == "" {
 		switch true {
 		case options.Host == "":
-			return nil, fmt.Errorf("host is required")
+			return nil, fmt.Errorf("parameter Host is required")
 		case options.Port == 0:
-			return nil, fmt.Errorf("port is required")
+			return nil, fmt.Errorf("parameter Port is required")
 		case options.Namespace == "":
-			return nil, fmt.Errorf("namespace is required")
+			return nil, fmt.Errorf("parameter Namespace is required")
 		}
 
 		s := ""
@@ -55,29 +59,44 @@ func MakeLocktopusClient(options ConnectionOptions) (*LocktopusClient, error) {
 			s = "s"
 		}
 
-		url = fmt.Sprintf("ws%s://%s:%d/%s?namespace=%s", s, options.Host, options.Port, version, options.Namespace)
+		values := url.Values{}
+		values.Set("namespace", options.Namespace)
+
+		if options.ForceCloseTimeoutMs != nil {
+			values.Set(constants.AbandonTimeoutQueryParameterName, fmt.Sprintf("%d", *options.ForceCloseTimeoutMs))
+		}
+
+		fmt.Sprintln(values.Encode())
+
+		address = fmt.Sprintf("ws%s://%s:%d/%s?%s", s, options.Host, options.Port, version, values.Encode())
 	}
 
-	conn, _, err := websocket.DefaultDialer.Dial(url, nil)
+	conn, r, err := websocket.DefaultDialer.Dial(address, nil)
 	if err != nil {
-		return nil, fmt.Errorf("cannot dial to Locktopus server: %s", err)
+		body, readErr := ioutil.ReadAll(r.Body)
+		if readErr != nil {
+			err = fmt.Errorf("cannot read response body after handshake error: %w", err)
+		} else {
+			err = fmt.Errorf("handshake error: %s", string(body))
+		}
+
+		return nil, err
 	}
 
-	gc := LocktopusClient{
+	lc := LocktopusClient{
 		conn: conn,
 	}
 
-	gc.responses = make(chan result)
-	go gc.readResponses(gc.responses)
+	lc.responses = make(chan result)
+	go lc.readResponses(lc.responses)
 
-	gc.released = make(chan struct{}, 1)
+	lc.released = make(chan struct{}, 1)
 
-	return &gc, nil
+	return &lc, nil
 }
 
 const closeMessage = "close"
 
-// Close us used to close the connection when it is not needed anymore or after an error.
 func (c *LocktopusClient) Close() error {
 	err := c.conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, closeMessage), time.Now().Add(time.Second))
 	if err != nil {
@@ -85,7 +104,6 @@ func (c *LocktopusClient) Close() error {
 	}
 
 	return c.conn.Close()
-
 }
 
 // AddLockResource adds resources to be used and flushed within next Lock() call.

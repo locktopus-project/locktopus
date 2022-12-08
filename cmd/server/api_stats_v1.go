@@ -4,12 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/locktopus-project/locktopus/internal/constants"
 	ns "github.com/locktopus-project/locktopus/internal/namespace"
 )
 
-func statsV1Handler(w http.ResponseWriter, r *http.Request) {
+func statsV1Handler(w http.ResponseWriter, r *http.Request, abandonTimeout time.Duration) {
 	nsParam := r.URL.Query().Get(constants.NamespaceQueryParameterName)
 
 	if nsParam == "" {

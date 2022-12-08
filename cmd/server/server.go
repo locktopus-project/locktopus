@@ -19,15 +19,21 @@ const numberOfPosixSignals = 28
 
 type apiHandler struct {
 	version        string
-	handler        func(w http.ResponseWriter, r *http.Request)
+	handler        func(w http.ResponseWriter, r *http.Request, defaultAbandonTimeout time.Duration)
 	connStrExample string
 }
 
 func main() {
 	parseArguments()
 
-	server := makeServer(hostname, port, apiHandlers)
-	listenErr := listen(server)
+	server := MakeServer(
+		ServerParameters{
+			Hostname:              hostname,
+			Port:                  port,
+			DefaultAbandonTimeout: defaultAbandonTimeout,
+		},
+	)
+	listenErr := StartListening(server)
 
 	exitCode := 0
 
@@ -37,8 +43,6 @@ func main() {
 		exitCode = 1
 	case s := <-getSignals():
 		mainLogger.Infof("Received signal: %s", s)
-	case <-wait(stopAfter):
-		mainLogger.Info("Server TTL exceeded")
 	}
 
 	mainLogger.Info("Waiting for existing locks to be released... Send SIGINT or SIGTERM again to force exit")
@@ -64,11 +68,25 @@ func getSignals() <-chan os.Signal {
 	return ch
 }
 
-func makeServer(hostname string, port string, apiHandlers []apiHandler) http.Server {
+type ServerParameters struct {
+	Hostname              string
+	Port                  string
+	DefaultAbandonTimeout time.Duration
+}
+
+func MakeServer(params ServerParameters) http.Server {
+	hostname := params.Hostname
+	port := params.Port
+	defaultAbandonTimeout := params.DefaultAbandonTimeout
+
 	r := mux.NewRouter()
 
 	for _, apiHandler := range apiHandlers {
-		r.HandleFunc(apiHandler.version, apiHandler.handler)
+		ah := apiHandler
+
+		r.HandleFunc(ah.version, func(w http.ResponseWriter, r *http.Request) {
+			ah.handler(w, r, defaultAbandonTimeout)
+		})
 	}
 
 	r.HandleFunc("/", greetingsHandler)
@@ -99,7 +117,7 @@ var apiHandlers = []apiHandler{
 
 var lastConnID int64 = -1
 
-func listen(server http.Server) <-chan error {
+func StartListening(server http.Server) <-chan error {
 	if statInterval > 0 {
 		go func() {
 			for {
@@ -130,6 +148,9 @@ func greetingsHandler(w http.ResponseWriter, r *http.Request) {
 	for _, apiHandler := range apiHandlers {
 		w.Write([]byte(fmt.Sprintf("%s\te.g. %s\n", apiHandler.version, apiHandler.connStrExample)))
 	}
+
+	w.Write([]byte("\nServer parameters:\n"))
+	w.Write([]byte(fmt.Sprintf("Default abandon timeout: %s\n", hostname)))
 
 	namespaces := ns.GetNamespaces()
 	if len(namespaces) == 0 {

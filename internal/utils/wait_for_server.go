@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-func CheckServerAvailability(url string, timeoutMs int, pollIntervalMs int) error {
+func EnsureServerAvailability(url string, timeoutMs int, pollIntervalMs int) error {
 	ticker := time.NewTicker(time.Duration(pollIntervalMs) * time.Millisecond)
 	timeout := time.After(time.Duration(timeoutMs) * time.Millisecond)
 
