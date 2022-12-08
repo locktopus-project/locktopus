@@ -22,7 +22,7 @@ var arguments struct {
 	LogClients           string `long:"log-clients" description:"Log client sessions (true/false). Overrides env var LOCKTOPUS_LOG_CLIENTS. Default: false"`
 	LogLocks             string `long:"log-locks" description:"Log locks caused by client sessions (true/false). Overrides env var LOCKTOPUS_LOG_LOCKS. Default: false"`
 	StatisticsInterval   string `long:"stats-interval" description:"Log usage statistics every N>0 seconds. Overrides env var LOCKTOPUS_STATS_INTERVAL. Default: 0 (never)"`
-	GlobalAbandonTimeout string `long:"default-abandon-timeout" description:"Default abandon timeout (ms) used fo releasing closed connections not released by clients. Overrides env var LOCKTOPUS_DEFAULT_ABANDON_TIMEOUT. Default: 60000"`
+	GlobalAbandonTimeout string `long:"default-abandon-timeout" description:"Default abandon timeout (ms) used for releasing closed connections not released by clients. Overrides env var LOCKTOPUS_DEFAULT_ABANDON_TIMEOUT. Default: 60000"`
 }
 
 func parseArguments() {
