@@ -1,46 +1,37 @@
 # LOCKTOPUS
 
-A service for managing locks. 
+A service for managing locks.
+
+Available docs:
+
+- [CONCEPT](./docs/CONCEPT.md)
+- [API](./docs/API.md)
+- [QnA](./docs/QNA.md)
 
 ## What problem does it solve?
 
-In a distributed system there *always* is a need to coordinate access to resources. Without such, multiple processes may access the same resources at the same time (data race). This may lead to deadlocks, lost updates and consistency violations. **Locktopus** is a service that addresses this problem by serializing clients' access to conflicting resources. It receives a set of resources that need to be accessed from a client and locks them as soon as nobody is using them.
+In a distributed system there _always_ is a need to coordinate access to resources. Without such, multiple processes may access the same resources at the same time (data race). This may lead to deadlocks, lost updates and consistency violations. **Locktopus** is a service that addresses this problem by serializing clients' access to conflicting resources. It receives a set of resources that need to be accessed from a client and locks them as soon as nobody is using them.
 
 ## Features
 
-- **WebSocket communication** ensures a client is notified of his lock's state as soon as it is changed
-- Near-**constant** lock/unlock **time**. There are no queues under the hood, just goroutines, hashmaps and mutexes
-- **Read/Write** locks for separate resources
 - **FIFO** lock order
-
-## Connection Lifecycle and Workflow
-
-The communication is stateful and synchronous. It begins with establishing a **connection** to the server by the client. The connection is reusable after the lock is released. There can be only one lock managed by connection at a moment. 
-
-A client can perform either of two commands: **LOCK** or **RELEASE** depending on in which of the three states it is: **READY**, **ENQUEUED** or **ACQUIRED**.
-
-The states are as follows:
-
-
-| State        | Description                                                                                                                                                              |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **READY**    | The client is ready to perform locking. This is the default state of the new connection.  **LOCK** is permitted                                                          |
-| **ENQUEUED** | The lock has been enqueued but not acquired because some of the resources are taken by another client. Wait until it is **ACQUIRED**. Premature **RELEASE** is permitted |
-| **ACQUIRED** | The lock has been completely taken by the client. **RELEASE** is permitted                                                                                               |
-
-Client commands are as follows:
-
-- **LOCK**: Try locking a set of resources. The server will immediately respond with a state indicating whether the lock has been **ENQUEUED** or **ACQUIRED**. If enqueued, the client will be then notified as soon as the lock is acquired.
--  **RELEASE**: Release all the resources locked/enqueued by the precedent **LOCK** command. The server will immediately respond with the state **READY**. If the connection has been closed without releasing the lock, the server will release it after a timeout.
+- **subtree locking**. Lock resources as precise as you need
+- **multiple resources** can be locked at once
+- **Read/Write** locks for separate resources within one lock session
+- **Live communication** (WebSocket) ensures a client is notified of his lock's state as soon as it is changed
+- Near-**constant** lock/unlock **time**. There are no explicit queues under the hood, just goroutines, hashmaps and mutexes
 
 ## Locktopus vs Redlock
 
-One might ask why not use [Redlock](https://redis.io/docs/manual/patterns/distributed-locks/) instead. The drawbacks of Redlock are:
+One might ask why not use [Redlock](https://redis.io/docs/manual/patterns/distributed-locks/) instead. Redlock is a good tool for distributed locking, designed for running in a cluster. It is quite supported by the community and has a lot of client libraries. But there are limitations to it, and some of them are:
+
 - no option to lock multiple resources at once
 - no read/write locks, just write locks
 - time overhead
 - no FIFO lock order
 - livelocks are possible
+
+The brief considerations about cluster mode are given in the section below.
 
 ## Cluster
 
@@ -76,7 +67,7 @@ Use `--help` (`-h`) flag to see all available options:
 
 ## Testing
 
-Testing can be done with old-fashioned 
+Testing can be done with old-fashioned
 
 ```bash
 go test ./...
@@ -88,7 +79,7 @@ go test ./...
 go test -timeout 30s ./pkg/... -count 10000
 ```
 
-Adjust `-count` (and `-timeout` correspondingly) to increase the probability of race conditions happenning.
+Adjust `-count` (and `-timeout` correspondingly) to increase the probability of race conditions happening.
 
 **E2E tests** (cmd/server) run a server instance under the hood. If you want to run a separate one, use env var `SERVER_ADDRESS`.
 
@@ -103,7 +94,7 @@ After starting a simulation, neither stdout nor stderr outputs are expected. The
 ## Contribution
 
 Feel free to open issues for any reason or contact the maintainer directly.
- 
+
 ## License
 
 The software is published under MIT [LICENCE](./LICENCE)
