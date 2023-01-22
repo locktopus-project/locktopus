@@ -12,7 +12,7 @@ This repository contains the following:
 
 ## Brief description
 
-In a distributed system there _always_ is a need to coordinate access to resources. Without such, multiple processes may access the same resources at the same time (data race). This may lead to deadlocks, lost updates and consistency violations. **Locktopus** is a service that addresses this problem by serializing clients' access to conflicting resources. It receives a set of resources that need to be accessed from a client and locks them as soon as nobody is using them.
+Quite often in a backend application, multiple processes access the same data at the same time. This is called a race condition, and it is just a natural state of the things in the World. But in software, they may lead to deadlocks, lost updates, consistency violations, etc. **Locktopus** addresses this problem by serializing access to resources.
 
 ### Features
 
@@ -49,7 +49,7 @@ Use `--help` (`-h`) flag to see all available options:
 
 ## Testing
 
-To test everything at-once, run
+To test everything at once, run
 
 ```bash
 go test ./...
