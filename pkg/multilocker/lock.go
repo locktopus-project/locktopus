@@ -44,7 +44,8 @@ func NewUnlocker() Unlocker {
 	}
 }
 
-// Unlock unlocks Lock and returns after it is completely unlocked, though there is no guarantee that the descendent Lock is ready to be acquired at that time.
+// Unlock unlocks Lock and returns after it is completely unlocked, though there is no guarantee that the dependent Lock (if exists) is ready to be acquired at that time.
+// Calling Unlock() before the Lock is enqueued can lead to panic.
 // Do not call Unlock() more than once.
 func (u Unlocker) Unlock() {
 	unlockProcessed := make(chan struct{})

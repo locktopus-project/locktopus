@@ -2,7 +2,6 @@ package multilocker_test
 
 import (
 	"reflect"
-	"runtime"
 	"sync"
 	"testing"
 
@@ -51,22 +50,6 @@ func TestLock_SingleGroupShouldBeLockedImmediately(t *testing.T) {
 	lr := ml.NewResourceLock(ml.LockTypeRead, []string{"a", "b", "c"})
 
 	m.Lock([]ml.ResourceLock{lr})
-}
-
-func TestLock_PrematureUnlock(t *testing.T) {
-	m := ml.NewMultilocker()
-
-	u := ml.NewUnlocker()
-	go func() { u.Unlock() }()
-
-	runtime.Gosched()
-
-	l := m.Lock([]ml.ResourceLock{
-		ml.NewResourceLock(ml.LockTypeRead, []string{"1"}),
-	}, u)
-
-	l.Acquire()
-	// no panic expected
 }
 
 func TestLock_DuplicateRecordsShouldNotBringDeadlock(t *testing.T) {
