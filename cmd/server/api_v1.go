@@ -117,9 +117,9 @@ func (cs ClientState) String() string {
 }
 
 func readMessages(conn *websocket.Conn, ch chan<- requestMessage) (err error) {
-	cm := requestMessage{}
-
 	for {
+		cm := requestMessage{}
+
 		if err = conn.ReadJSON(&cm); err != nil {
 			break
 		}
