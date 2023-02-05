@@ -52,13 +52,13 @@ Use `--help` (`-h`) flag to see all available options:
 To test everything at once, run
 
 ```bash
-go test ./...
+go test -race ./...
 ```
 
 **Unit tests** of the core library can be run with the command
 
 ```bash
-go test -timeout 30s ./pkg/... -count 10000
+go test -timeout 30s ./pkg/... -race -count 1000
 ```
 
 Adjust `-count` (and `-timeout` correspondingly) to increase the probability of race conditions happening.
