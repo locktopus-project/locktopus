@@ -237,7 +237,7 @@ func TestLock_AdjacentReadsDoNotBlockEachOther(t *testing.T) {
 
 	assertLockIsWaiting(t, w10)
 
-	for _, u := range []ml.Unlocker{u9, u8, u7, u6, u5, u4, u3, u2} {
+	for _, u := range []*ml.Unlocker{u9, u8, u7, u6, u5, u4, u3, u2} {
 		u.Unlock()
 	}
 

@@ -135,14 +135,14 @@ func (ml *MultiLocker) Statistics() MultilockerStatistics {
 // Lock is used to atomically lock a slice of ResourceLock's.
 // The lock will be acquired as soon as there are no precedent resources whose locks interfere with this ones by path and lock types.
 // If unlocker is not provided, it is made internally. In any case, the returned Lock can be used to receive the reference unlocker.
-func (ml *MultiLocker) Lock(resourceLocks []ResourceLock, unlocker ...Unlocker) *Lock {
+func (ml *MultiLocker) Lock(resourceLocks []ResourceLock, unlocker ...*Unlocker) *Lock {
 	ml.activeLockers.Add(1)
 
 	if atomic.LoadInt32(&ml.closed) > 0 {
 		panic("multilocker is closed")
 	}
 
-	var u Unlocker
+	var u *Unlocker
 
 	if len(unlocker) > 1 {
 		panic("Passed more than one unlocker. Review your logic")
@@ -157,7 +157,7 @@ func (ml *MultiLocker) Lock(resourceLocks []ResourceLock, unlocker ...Unlocker) 
 	return locker
 }
 
-func (ml *MultiLocker) lockResources(lockGroup []ResourceLock, u Unlocker) *Lock {
+func (ml *MultiLocker) lockResources(lockGroup []ResourceLock, u *Unlocker) *Lock {
 	ml.mx.Lock()
 
 	ml.lastLockID++
@@ -457,7 +457,7 @@ func (ml *MultiLocker) cleanPaths() {
 	ml.cleaned <- struct{}{}
 }
 
-func (ml *MultiLocker) handleUnlocker(u Unlocker, vertexes []*dagLock.Vertex, resourceLocks []ResourceLock, tokenRefGroup [][]token) {
+func (ml *MultiLocker) handleUnlocker(u *Unlocker, vertexes []*dagLock.Vertex, resourceLocks []ResourceLock, tokenRefGroup [][]token) {
 	unlockCallback := <-u.ch
 
 	ml.mx.Lock()

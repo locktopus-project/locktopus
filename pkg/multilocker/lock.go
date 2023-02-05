@@ -2,14 +2,14 @@ package multilocker
 
 type Lock struct {
 	ch chan struct{}
-	u  Unlocker
+	u  *Unlocker
 	id int64
 }
 
 // Acquire waits until Lock is acquired and returns corresponding Unlocker.
 // Use the returned value to unlock the group.
 // It is ok to call Acquire() multiple times, though it will not have further side effects.
-func (l *Lock) Acquire() Unlocker {
+func (l *Lock) Acquire() *Unlocker {
 	<-l.ch
 
 	return l.u
@@ -27,7 +27,7 @@ func (l *Lock) ID() int64 {
 	return l.id
 }
 
-func (l *Lock) makeReady(u Unlocker) {
+func (l *Lock) makeReady(u *Unlocker) {
 	l.u = u
 	close(l.ch)
 }
@@ -38,8 +38,8 @@ type Unlocker struct {
 	ch chan chan struct{}
 }
 
-func NewUnlocker() Unlocker {
-	return Unlocker{
+func NewUnlocker() *Unlocker {
+	return &Unlocker{
 		ch: make(chan chan struct{}),
 	}
 }
@@ -47,7 +47,7 @@ func NewUnlocker() Unlocker {
 // Unlock unlocks Lock and returns after it is completely unlocked, though there is no guarantee that the dependent Lock (if exists) is ready to be acquired at that time.
 // Calling Unlock() before the Lock is enqueued can lead to panic.
 // Do not call Unlock() more than once.
-func (u Unlocker) Unlock() {
+func (u *Unlocker) Unlock() {
 	unlockProcessed := make(chan struct{})
 	u.ch <- unlockProcessed
 	<-unlockProcessed
