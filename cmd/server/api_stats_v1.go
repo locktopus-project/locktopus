@@ -33,6 +33,6 @@ func statsV1Handler(w http.ResponseWriter, r *http.Request, abandonTimeout time.
 		return
 	}
 
-	w.Write(serialized)
 	w.WriteHeader(http.StatusOK)
+	w.Write(serialized)
 }
