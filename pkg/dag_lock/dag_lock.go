@@ -8,6 +8,7 @@ package daglock
 import (
 	"fmt"
 	"sync"
+	"sync/atomic"
 
 	internal "github.com/locktopus-project/locktopus/pkg/set"
 )
@@ -27,7 +28,7 @@ const (
 )
 
 // LockState lifecycle of a Vertex: [Created] -> [LockedByParents] -> [LockedByClient] -> [Released] -> [Unlocked]
-type LockState int8
+type LockState int32
 
 const (
 	Created         LockState = iota
@@ -43,7 +44,7 @@ const (
 type Vertex struct {
 	_mx             sync.Mutex
 	lockType        LockType
-	lockState       LockState
+	lockState       atomic.Int32
 	selfMx          sync.Mutex
 	parents         internal.Set[*Vertex]
 	children        internal.Set[*Vertex]
@@ -91,24 +92,26 @@ func (v *Vertex) AddChild(c *Vertex) {
 	c._mx.Lock()
 	defer c._mx.Unlock()
 
-	if c.lockState > LockedByParents {
+	cLockState := LockState(c.lockState.Load())
+
+	if cLockState > LockedByParents {
 		panic("Cannot bind released child. Fix your logic")
 	}
 
-	if !v.HasParents() && v.lockState < Released {
-		v.lockState = Released
+	if !v.HasParents() && LockState(v.lockState.Load()) < Released {
+		v.lockState.Store(int32(Released))
 	}
 
 	c.parents.Add(v)
 	v.children.Add(c)
 
-	if v.lockState > LockedByParents && c.lockType == LockTypeRead && v.lockType == LockTypeRead {
+	if LockState(v.lockState.Load()) > LockedByParents && c.lockType == LockTypeRead && v.lockType == LockTypeRead {
 		return
 	}
 
-	if c.lockState == Created {
+	if cLockState == Created {
 		c.selfMx.Lock()
-		c.lockState = LockedByParents
+		c.lockState.Store(int32(LockedByParents))
 	}
 }
 
@@ -126,7 +129,7 @@ func (v *Vertex) Lock() {
 	v.selfMx.Lock()
 
 	v._mx.Lock()
-	v.lockState = LockedByClient
+	v.lockState.Store(int32(LockedByClient))
 	v._mx.Unlock()
 }
 
@@ -145,7 +148,7 @@ func (v *Vertex) LockChan() <-chan struct{} {
 
 	ok := v.selfMx.TryLock()
 	if ok {
-		v.lockState = LockedByClient
+		v.lockState.Store(int32(LockedByClient))
 
 		close(ch)
 	} else {
@@ -155,7 +158,7 @@ func (v *Vertex) LockChan() <-chan struct{} {
 			v._mx.Lock()
 			defer v._mx.Unlock()
 
-			v.lockState = LockedByClient
+			v.lockState.Store(int32(LockedByClient))
 
 			close(ch)
 		}()
@@ -168,12 +171,14 @@ func (v *Vertex) LockChan() <-chan struct{} {
 func (v *Vertex) Unlock() {
 	v._mx.Lock()
 
-	if v.lockState != LockedByClient {
-		panic("Unable to unlock: Call Unlock only after acquiring Lock. lockState = " + fmt.Sprint(v.lockState))
+	ls := LockState(v.lockState.Load())
+
+	if ls != LockedByClient {
+		panic("Unable to unlock: Call Unlock only after acquiring Lock. lockState = " + fmt.Sprint(ls))
 	}
 
 	v.selfMx.Unlock()
-	v.lockState = Unlocked
+	v.lockState.Store(int32(Unlocked))
 
 	v._mx.Unlock()
 
@@ -182,7 +187,7 @@ func (v *Vertex) Unlock() {
 
 // Useless means that adding children to v has no point. However, doig so is not forbidden and will result in a no-op.
 func (v *Vertex) Useless() bool {
-	return v.lockState == Unlocked && !v.HasParents()
+	return LockState(v.lockState.Load()) == Unlocked && !v.HasParents()
 }
 
 func (v *Vertex) LockType() LockType {
@@ -190,7 +195,7 @@ func (v *Vertex) LockType() LockType {
 }
 
 func (v *Vertex) LockState() LockState {
-	return v.lockState
+	return LockState(v.lockState.Load())
 }
 
 func (v *Vertex) allParentsReleased() bool {
@@ -221,7 +226,7 @@ func (v *Vertex) refreshState() {
 	defer v._mx.Unlock()
 
 	if !v.HasParents() {
-		if v.lockState == Unlocked {
+		if LockState(v.lockState.Load()) == Unlocked {
 			for node := range v.children {
 				node.unbindParent(v)
 				node.refreshState()
@@ -233,9 +238,9 @@ func (v *Vertex) refreshState() {
 	}
 
 	if v.allParentsReleased() {
-		if v.lockState == LockedByParents {
+		if LockState(v.lockState.Load()) == LockedByParents {
 			v.selfMx.Unlock()
-			v.lockState = Released
+			v.lockState.Store(int32(Released))
 
 			if v.lockType == LockTypeWrite {
 				return

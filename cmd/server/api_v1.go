@@ -190,7 +190,7 @@ func handleCommunication(conn *websocket.Conn, multilocker *ml.MultiLocker, conn
 
 			lockLogger.Infof("Locked resources for connection [id = %d]: %v", connID, resourceLocks)
 
-			l = &newLock
+			l = newLock
 			id = l.ID()
 
 			select {

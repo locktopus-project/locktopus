@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/url"
+	"sync/atomic"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -16,7 +17,7 @@ import (
 type LocktopusClient struct {
 	conn      *websocket.Conn
 	lr        []resource
-	acquired  bool
+	acquired  atomic.Bool
 	lockID    string
 	responses chan result
 	released  chan struct{}
@@ -149,7 +150,7 @@ func (c *LocktopusClient) Lock() (err error) {
 		return fmt.Errorf("unexpected response action returned from server: %s", response.Action)
 	}
 
-	c.acquired = response.State == "acquired"
+	c.acquired.Store(response.State == "acquired")
 	c.lockID = response.ID
 
 	return nil
@@ -157,7 +158,7 @@ func (c *LocktopusClient) Lock() (err error) {
 
 // IsAcquired returns true if last Lock() has been acquired, so there is no need to call Acquire()
 func (c *LocktopusClient) IsAcquired() bool {
-	return c.acquired
+	return c.acquired.Load()
 }
 
 func (c *LocktopusClient) LockID() string {
@@ -171,7 +172,7 @@ var ErrUnexpectedResponse = errors.New("unexpected response")
 func (c *LocktopusClient) Acquire() (err error) {
 	var response responseMessage
 
-	if c.acquired {
+	if c.acquired.Load() {
 		return nil
 	}
 
@@ -204,7 +205,7 @@ func (c *LocktopusClient) Acquire() (err error) {
 		return fmt.Errorf("unexpected response action returned from server: %s", response.Action)
 	}
 
-	c.acquired = true
+	c.acquired.Store(true)
 
 	return nil
 }
@@ -247,7 +248,7 @@ func (c *LocktopusClient) Release() (err error) {
 		return fmt.Errorf("unexpected response action returned from server: %s", response.Action)
 	}
 
-	c.acquired = false
+	c.acquired.Store(false)
 
 	return nil
 }

@@ -135,7 +135,7 @@ func (ml *MultiLocker) Statistics() MultilockerStatistics {
 // Lock is used to atomically lock a slice of ResourceLock's.
 // The lock will be acquired as soon as there are no precedent resources whose locks interfere with this ones by path and lock types.
 // If unlocker is not provided, it is made internally. In any case, the returned Lock can be used to receive the reference unlocker.
-func (ml *MultiLocker) Lock(resourceLocks []ResourceLock, unlocker ...Unlocker) Lock {
+func (ml *MultiLocker) Lock(resourceLocks []ResourceLock, unlocker ...Unlocker) *Lock {
 	ml.activeLockers.Add(1)
 
 	if atomic.LoadInt32(&ml.closed) > 0 {
@@ -157,7 +157,7 @@ func (ml *MultiLocker) Lock(resourceLocks []ResourceLock, unlocker ...Unlocker) 
 	return locker
 }
 
-func (ml *MultiLocker) lockResources(lockGroup []ResourceLock, u Unlocker) Lock {
+func (ml *MultiLocker) lockResources(lockGroup []ResourceLock, u Unlocker) *Lock {
 	ml.mx.Lock()
 
 	ml.lastLockID++
@@ -327,6 +327,7 @@ func (ml *MultiLocker) lockResources(lockGroup []ResourceLock, u Unlocker) Lock 
 			continue
 		// Otherwise, return non-acquired lock and do the locking in the background
 		default:
+
 			go func() {
 				<-vertexLock
 				atomic.AddInt64(&ml.statistics.pendingVertexCount, -1)
@@ -344,7 +345,7 @@ func (ml *MultiLocker) lockResources(lockGroup []ResourceLock, u Unlocker) Lock 
 				l.makeReady(u)
 			}()
 
-			return l
+			return &l
 		}
 	}
 
@@ -353,7 +354,7 @@ func (ml *MultiLocker) lockResources(lockGroup []ResourceLock, u Unlocker) Lock 
 	atomic.AddInt64(&ml.statistics.groupsPending, -1)
 	atomic.AddInt64(&ml.statistics.groupsAcquired, 1)
 
-	return l
+	return &l
 }
 
 func (ml *MultiLocker) tokenizeSegments(segments []string) []token {

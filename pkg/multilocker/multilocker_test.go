@@ -10,7 +10,7 @@ import (
 	sliceAppender "github.com/locktopus-project/locktopus/pkg/slice_appender"
 )
 
-func assertLockIsWaiting(t *testing.T, lw ml.Lock) {
+func assertLockIsWaiting(t *testing.T, lw *ml.Lock) {
 	select {
 	case <-lw.Ready():
 		t.Error("Lock should still wait")
@@ -18,7 +18,7 @@ func assertLockIsWaiting(t *testing.T, lw ml.Lock) {
 	}
 }
 
-func assertLockWontWait(t *testing.T, lw ml.Lock) {
+func assertLockWontWait(t *testing.T, lw *ml.Lock) {
 	select {
 	case <-lw.Ready():
 	default:

@@ -9,7 +9,7 @@ import (
 func TestNewVertex_ShoudBeInStateCreated(t *testing.T) {
 	v := NewVertex(LockTypeWrite)
 
-	if v.lockState != Created {
+	if LockState(v.lockState.Load()) != Created {
 		t.Error("Newly created vertex is not in state Ready")
 	}
 }

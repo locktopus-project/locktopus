@@ -9,7 +9,7 @@ type Lock struct {
 // Acquire waits until Lock is acquired and returns corresponding Unlocker.
 // Use the returned value to unlock the group.
 // It is ok to call Acquire() multiple times, though it will not have further side effects.
-func (l Lock) Acquire() Unlocker {
+func (l *Lock) Acquire() Unlocker {
 	<-l.ch
 
 	return l.u
@@ -18,12 +18,12 @@ func (l Lock) Acquire() Unlocker {
 // Ready returns chan that signals when l is ready to be acquired.
 // It is safe to call Ready() multiple times.
 // Unlike Acquire(), Ready() can be used with "select" statement.
-func (l Lock) Ready() <-chan struct{} {
+func (l *Lock) Ready() <-chan struct{} {
 	return l.ch
 }
 
 // ID returns unique incremental ID of the group within the LockSpace instance
-func (l Lock) ID() int64 {
+func (l *Lock) ID() int64 {
 	return l.id
 }
 
